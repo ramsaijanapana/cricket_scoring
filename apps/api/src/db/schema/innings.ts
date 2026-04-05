@@ -24,6 +24,7 @@ export const innings = pgTable('innings', {
 }, (table) => [
   unique('uq_match_innings').on(table.matchId, table.inningsNumber),
   index('idx_innings_match').on(table.matchId),
+  index('idx_innings_status').on(table.status),
 ]);
 
 export const over = pgTable('over', {

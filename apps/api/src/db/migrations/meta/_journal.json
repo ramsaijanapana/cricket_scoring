@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1775400730126,
+      "tag": "0000_special_wildside",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1775487130126,
+      "tag": "0001_partnership",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1775573530126,
+      "tag": "002_social_platform",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1775659930126,
+      "tag": "0004_timescaledb_hypertable",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1775746330126,
+      "tag": "0003_architecture_hardening",
+      "breakpoints": true
+    }
+  ]
+}

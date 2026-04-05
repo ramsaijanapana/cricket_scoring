@@ -2,7 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { innings, match, matchTeam, matchFormatConfig } from '../db/schema/index';
 import { battingScorecard, bowlingScorecard, fieldingScorecard } from '../db/schema/scorecard';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 export const inningsRoutes: FastifyPluginAsync = async (app) => {
   // Create new innings (for 2nd innings, super over, etc.)
@@ -121,7 +121,10 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
     const [updated] = await db.update(battingScorecard).set({
       didNotBat: false,
     }).where(
-      eq(battingScorecard.inningsId, req.params.inningsId),
+      and(
+        eq(battingScorecard.inningsId, req.params.inningsId),
+        eq(battingScorecard.playerId, req.body.playerId),
+      ),
     ).returning();
 
     return { success: true };
@@ -161,8 +164,8 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
     const secondInnings = allInnings[1];
     const deficit = firstInnings.totalRuns - secondInnings.totalRuns;
 
-    // Follow-on threshold: 200 for 5-day, 150 for 3/4-day, 100 for 2-day, 75 for 1-day
-    const threshold = 200; // default Test threshold
+    // Use follow-on threshold from format config, fallback to 200 (standard Test threshold)
+    const threshold = formatConfig.followOnThreshold ?? 200;
     if (deficit < threshold) {
       return reply.status(400).send({
         error: { code: 'VALIDATION_ERROR', message: `Deficit (${deficit}) is less than follow-on threshold (${threshold})` },

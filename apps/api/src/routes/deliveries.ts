@@ -5,6 +5,8 @@ import { scoringEngine } from '../engine/scoring-engine';
 import { broadcast } from '../services/realtime';
 import { eq, and, desc } from 'drizzle-orm';
 import type { DeliveryInput } from '@cricket/shared';
+import { requireAuth, requireRole } from '../middleware/auth';
+import { validateBody, recordDeliverySchema } from '../middleware/validation';
 
 /**
  * Delivery routes — context.md section 6.1
@@ -17,11 +19,23 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
   // Submit a ball — context.md section 6.1
   app.post<{
     Params: { id: string };
-    Body: Omit<DeliveryInput, 'match_id'> & { client_id?: string; expected_stack_pos?: number };
-  }>('/:id/deliveries', async (req, reply) => {
+    Body: Omit<DeliveryInput, 'matchId'> & { client_id?: string; expected_stack_pos?: number };
+  }>('/:id/deliveries', { preHandler: [requireAuth, requireRole('scorer', 'admin'), validateBody(recordDeliverySchema)] }, async (req, reply) => {
+    const validated = (req as any).validated ?? req.body;
     const input: DeliveryInput = {
-      ...req.body,
-      match_id: req.params.id,
+      matchId: req.params.id,
+      inningsNum: validated.innings_num,
+      bowlerId: validated.bowler_id,
+      strikerId: validated.striker_id,
+      nonStrikerId: validated.non_striker_id,
+      runsBatsman: validated.runs_batsman,
+      runsExtras: validated.runs_extras,
+      extraType: validated.extra_type,
+      isWicket: validated.is_wicket ?? false,
+      wicketType: validated.wicket_type,
+      dismissedId: validated.dismissed_player_id,
+      fielderIds: validated.fielder_id ? [validated.fielder_id] : [],
+      shotType: validated.shot_type,
     };
 
     // Sync conflict detection (context.md section 5.10) — check undo_stack_pos if provided
@@ -59,12 +73,32 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
 
     // Idempotency check: if client_id already exists, return the existing delivery
     if (req.body.client_id) {
-      // For now, skip idempotency check (would require client_id column on delivery table)
+      const existingDelivery = await db.query.delivery.findFirst({
+        where: eq(delivery.clientId, req.body.client_id),
+      });
+      if (existingDelivery) {
+        return reply.status(200).send({
+          delivery: existingDelivery,
+          commentary: null,
+          overCompleted: false,
+          inningsCompleted: false,
+          matchCompleted: false,
+          newStrikerId: existingDelivery.strikerId,
+          newNonStrikerId: existingDelivery.nonStrikerId,
+          scorecardSnapshot: {
+            innings_score: existingDelivery.inningsScore,
+            innings_wickets: existingDelivery.inningsWickets,
+            innings_overs: existingDelivery.inningsOvers,
+            run_rate: parseFloat(existingDelivery.runRate),
+          },
+          idempotent: true,
+        });
+      }
     }
 
     let result;
     try {
-      result = await scoringEngine.recordDelivery(input);
+      result = await scoringEngine.recordDelivery(input, req.body.client_id);
     } catch (err: any) {
       if (err.message?.startsWith('VALIDATION_ERROR:')) {
         return reply.status(400).send({
@@ -79,20 +113,20 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
     if (result.delivery.isWicket) {
       broadcast.wicket(req.params.id, {
         delivery: result.delivery as any,
-        wicket_detail: {
-          wicket_type: result.delivery.wicketType as any,
-          dismissed_id: result.delivery.dismissedId!,
-          bowler_id: result.delivery.bowlerId,
-          fielder_ids: (result.delivery.fielderIds || []) as string[],
+        wicketDetail: {
+          wicketType: result.delivery.wicketType as any,
+          dismissedId: result.delivery.dismissedId!,
+          bowlerId: result.delivery.bowlerId,
+          fielderIds: (result.delivery.fielderIds || []) as string[],
           text: `${result.delivery.wicketType}`,
         },
         commentary: result.commentary,
-        partnership_ended: null as any, // TODO: compute partnership
+        partnershipEnded: null as any, // TODO: compute partnership
       });
     } else {
       broadcast.delivery(req.params.id, {
         delivery: result.delivery as any,
-        scorecard_snapshot: result.scorecardSnapshot as any,
+        scorecardSnapshot: result.scorecardSnapshot as any,
         commentary: result.commentary,
       });
     }
@@ -100,21 +134,21 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
     // Broadcast over completion
     if (result.overCompleted) {
       broadcast.over(req.params.id, {
-        over_summary: {
-          over_num: result.delivery.overNum,
+        overSummary: {
+          overNum: result.delivery.overNum,
           runs: result.delivery.totalRuns,
           wickets: result.delivery.isWicket ? 1 : 0,
           maidens: result.delivery.totalRuns === 0,
           extras: result.delivery.runsExtras,
         },
-        bowler_stats: {
-          bowler_id: result.delivery.bowlerId,
+        bowlerStats: {
+          bowlerId: result.delivery.bowlerId,
           overs: 0,
           runs: 0,
           wickets: 0,
           economy: 0,
         },
-        run_rate: result.scorecardSnapshot.run_rate,
+        runRate: result.scorecardSnapshot.run_rate,
       });
     }
 
@@ -147,7 +181,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{
     Params: { id: string };
     Body: { inningsId: string };
-  }>('/:id/deliveries/last', async (req, reply) => {
+  }>('/:id/deliveries/last', { preHandler: [requireAuth] }, async (req, reply) => {
     const result = await scoringEngine.undoLastBall(req.params.id, req.body.inningsId);
 
     if (!result.success) {
@@ -167,7 +201,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
   app.patch<{
     Params: { id: string; ballId: string };
     Body: Partial<DeliveryInput>;
-  }>('/:id/deliveries/:ballId', async (req, reply) => {
+  }>('/:id/deliveries/:ballId', { preHandler: [requireAuth] }, async (req, reply) => {
     const result = await scoringEngine.correctDelivery(req.params.ballId, req.body);
 
     if (!result.success) {
@@ -181,7 +215,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{
     Params: { id: string };
     Querystring: { from_stack_pos: string; inningsId: string };
-  }>('/:id/deliveries/batch', async (req, reply) => {
+  }>('/:id/deliveries/batch', { preHandler: [requireAuth] }, async (req, reply) => {
     const fromPos = parseInt(req.query.from_stack_pos, 10);
     const inningsId = req.query.inningsId;
     if (isNaN(fromPos)) {

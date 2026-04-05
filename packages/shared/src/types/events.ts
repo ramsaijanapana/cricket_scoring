@@ -4,31 +4,32 @@ import type { DismissalType } from './enums';
 // ─── Scoring Input (Scorer → Server) — context.md section 6.2 ───────────────
 
 export interface DeliveryInput {
-  match_id: string;
-  innings_num: 1 | 2 | 3 | 4;
+  matchId: string;
+  inningsNum: 1 | 2 | 3 | 4;
 
-  bowler_id: string;
-  striker_id: string;
-  non_striker_id: string;
+  bowlerId: string;
+  strikerId: string;
+  nonStrikerId: string;
 
-  runs_batsman: number;
-  runs_extras: number;
-  extra_type: 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty' | null;
+  runsBatsman: number;
+  runsExtras: number;
+  extraType: 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty' | null;
 
-  is_wicket: boolean;
-  wicket_type?: DismissalType | null;
-  dismissed_id?: string | null;
-  fielder_ids?: string[];
-  is_retired_hurt?: boolean;
+  isWicket: boolean;
+  wicketType?: DismissalType | null;
+  dismissedId?: string | null;
+  fielderIds?: string[];
+  isRetiredHurt?: boolean;
+  isDeadBall?: boolean;
 
   // Optional shot & pitch tracking
-  shot_type?: string | null;
-  landing_x?: number | null;
-  landing_y?: number | null;
-  wagon_x?: number | null;
-  wagon_y?: number | null;
-  pace_kmh?: number | null;
-  swing_type?: string | null;
+  shotType?: string | null;
+  landingX?: number | null;
+  landingY?: number | null;
+  wagonX?: number | null;
+  wagonY?: number | null;
+  paceKmh?: number | null;
+  swingType?: string | null;
 }
 
 // ─── WebSocket Events (Server → Client) — context.md section 6.2 ────────────
@@ -47,39 +48,39 @@ export interface DeliveryInput {
 
 export interface DeliveryEvent {
   delivery: Delivery;
-  scorecard_snapshot: ScorecardSnapshot;
+  scorecardSnapshot: ScorecardSnapshot;
   commentary: Commentary;
 }
 
 export interface WicketEvent {
   delivery: Delivery;
-  wicket_detail: {
-    wicket_type: DismissalType;
-    dismissed_id: string;
-    bowler_id: string;
-    fielder_ids: string[];
+  wicketDetail: {
+    wicketType: DismissalType;
+    dismissedId: string;
+    bowlerId: string;
+    fielderIds: string[];
     text: string;
   };
   commentary: Commentary;
-  partnership_ended: Partnership;
+  partnershipEnded: Partnership;
 }
 
 export interface OverEvent {
-  over_summary: {
-    over_num: number;
+  overSummary: {
+    overNum: number;
     runs: number;
     wickets: number;
     maidens: boolean;
     extras: number;
   };
-  bowler_stats: {
-    bowler_id: string;
+  bowlerStats: {
+    bowlerId: string;
     overs: number;
     runs: number;
     wickets: number;
     economy: number;
   };
-  run_rate: number;
+  runRate: number;
 }
 
 export interface MilestoneEvent {
@@ -92,16 +93,16 @@ export interface MilestoneEvent {
 }
 
 export interface PredictionEvent {
-  win_prob_a: number;
-  win_prob_b: number;
-  projected_score_low: number;
-  projected_score_high: number;
+  winProbA: number;
+  winProbB: number;
+  projectedScoreLow: number;
+  projectedScoreHigh: number;
 }
 
 export interface DLSUpdateEvent {
-  par_score: number;
-  revised_target: number | null;
-  resources_remaining: number;
+  parScore: number;
+  revisedTarget: number | null;
+  resourcesRemaining: number;
 }
 
 export interface StatusEvent {
@@ -112,11 +113,11 @@ export interface StatusEvent {
 // ─── Scorecard Snapshot (embedded in delivery events) ────────────────────────
 
 export interface ScorecardSnapshot {
-  innings_score: number;
-  innings_wickets: number;
-  innings_overs: string;
-  run_rate: number;
-  required_run_rate: number | null;
+  inningsScore: number;
+  inningsWickets: number;
+  inningsOvers: string;
+  runRate: number;
+  requiredRunRate: number | null;
   target: number | null;
 }
 
@@ -133,8 +134,8 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  join_match: (data: { match_id: string }) => void;
-  leave_match: (data: { match_id: string }) => void;
-  submit_delivery: (data: DeliveryInput) => void;
-  undo_last_ball: (data: { match_id: string }) => void;
+  joinMatch: (data: { matchId: string }) => void;
+  leaveMatch: (data: { matchId: string }) => void;
+  submitDelivery: (data: DeliveryInput) => void;
+  undoLastBall: (data: { matchId: string }) => void;
 }

@@ -172,70 +172,71 @@ export interface Over {
 
 export interface Delivery {
   id: string;
-  match_id: string;
-  innings_num: 1 | 2 | 3 | 4;
-  over_num: number;              // 0-indexed
-  ball_num: number;              // 1-indexed within over; >6 = extras
-  legal_ball_num: number;        // count of legal deliveries
+  matchId: string;
+  inningsNum: 1 | 2 | 3 | 4;
+  overNum: number;               // 0-indexed
+  ballNum: number;               // 1-indexed within over; >6 = extras
+  legalBallNum: number;          // count of legal deliveries
 
-  bowler_id: string;
-  striker_id: string;
-  non_striker_id: string;
+  bowlerId: string;
+  strikerId: string;
+  nonStrikerId: string;
 
   // Outcome
-  runs_batsman: number;          // 0–6 including overthrows
-  runs_extras: number;
-  extra_type: 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty' | null;
-  total_runs: number;            // computed: runs_batsman + runs_extras
-  is_free_hit: boolean;          // true if delivery follows a front-foot no-ball
+  runsBatsman: number;           // 0-6 including overthrows
+  runsExtras: number;
+  extraType: 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty' | null;
+  totalRuns: number;             // computed: runsBatsman + runsExtras
+  isFreeHit: boolean;            // true if delivery follows a front-foot no-ball
 
   // Dismissal
-  is_wicket: boolean;
-  wicket_type: DismissalType | null;
-  dismissed_id: string | null;   // may differ from striker (run out)
-  fielder_ids: string[];         // catcher, run-out thrower, etc.
-  is_retired_hurt: boolean;
+  isWicket: boolean;
+  wicketType: DismissalType | null;
+  dismissedId: string | null;    // may differ from striker (run out)
+  fielderIds: string[];          // catcher, run-out thrower, etc.
+  isRetiredHurt: boolean;
+  isDeadBall: boolean;
 
   // Shot & Pitch Tracking (optional, for analytics)
-  shot_type: string | null;
-  landing_x: number | null;      // pitch map coordinates
-  landing_y: number | null;
-  wagon_x: number | null;        // wagon wheel endpoint
-  wagon_y: number | null;
-  pace_kmh: number | null;
-  swing_type: string | null;
+  shotType: string | null;
+  landingX: number | null;       // pitch map coordinates
+  landingY: number | null;
+  wagonX: number | null;         // wagon wheel endpoint
+  wagonY: number | null;
+  paceKmh: number | null;
+  swingType: string | null;
 
   // State snapshot (for fast reads without replay)
-  innings_score: number;         // cumulative score AFTER this ball
-  innings_wickets: number;
-  innings_overs: string;         // e.g. "12.4"
-  run_rate: number;
+  inningsScore: number;          // cumulative score AFTER this ball
+  inningsWickets: number;
+  inningsOvers: string;          // e.g. "12.4"
+  runRate: number;
 
-  commentary_id: string;
+  commentaryId: string;
   timestamp: string;             // ISO 8601
-  undo_stack_pos: number;        // event-source ordering position
+  undoStackPos: number;          // event-source ordering position
 
   // Override tracking (immutable corrections)
-  is_overridden: boolean;
-  override_of_id: string | null;
+  isOverridden: boolean;
+  overrideOfId: string | null;
 }
 
 // ─── Commentary — context.md section 5.4 ─────────────────────────────────────
 
 export interface Commentary {
   id: string;
-  delivery_id: string;
-  match_id: string;
-  innings_num: number;
-  over_ball: string;             // "14.3"
+  deliveryId: string;
+  matchId: string;
+  inningsNum: number;
+  overBall: string;              // "14.3"
   text: string;                  // primary commentary text
-  text_short: string;            // 1-line summary for ticker
-  emoji_text: string | null;     // emoji-enhanced version
+  textShort: string;             // 1-line summary for ticker
+  emojiText: string | null;      // emoji-enhanced version
   mode: 'auto' | 'manual' | 'assisted';
   language: string;              // ISO 639-1 code
   milestone: string | null;      // 'fifty' | 'hundred' | 'five_wickets' | etc.
-  drama_level: 1 | 2 | 3;       // 1=routine, 2=notable, 3=high-drama
-  published_at: string;
+  dramaLevel: 1 | 2 | 3;        // 1=routine, 2=notable, 3=high-drama
+  publishedAt: string;
 }
 
 // ─── Partnership — context.md section 5.5 ────────────────────────────────────

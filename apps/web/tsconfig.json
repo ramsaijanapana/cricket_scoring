@@ -3,7 +3,6 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "outDir": "./dist",
-    "rootDir": "./src",
     "paths": {
       "@/*": ["./src/*"],
       "@cricket/shared": ["../../packages/shared/src"]

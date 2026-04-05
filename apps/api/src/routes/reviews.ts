@@ -2,7 +2,8 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { review } from '../db/schema/review';
 import { delivery } from '../db/schema/index';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
+import { requireAuth } from '../middleware/auth';
 
 /**
  * Review routes — DRS review management.
@@ -19,7 +20,7 @@ export const reviewRoutes: FastifyPluginAsync = async (app) => {
       reviewingTeamId: string;
       inningsId: string;
     };
-  }>('/:id/reviews', async (req, reply) => {
+  }>('/:id/reviews', { preHandler: [requireAuth] }, async (req, reply) => {
     const { deliveryId, reviewingTeamId, inningsId } = req.body;
     const matchId = req.params.id;
 
@@ -38,13 +39,15 @@ export const reviewRoutes: FastifyPluginAsync = async (app) => {
       runs_awarded: deliveryRecord.totalRuns,
     };
 
-    // Count existing reviews for this team in this innings to determine reviewNumber
+    // Count existing reviews for this team in this match+innings to determine reviewNumber
     const existingReviews = await db.query.review.findMany({
-      where: eq(review.reviewingTeamId, reviewingTeamId),
+      where: and(
+        eq(review.matchId, matchId),
+        eq(review.reviewingTeamId, reviewingTeamId),
+        eq(review.inningsId, inningsId),
+      ),
     });
-    const reviewNumber = existingReviews.filter(
-      (r) => r.inningsId === inningsId,
-    ).length + 1;
+    const reviewNumber = existingReviews.length + 1;
 
     const [newReview] = await db.insert(review).values({
       matchId,
@@ -67,7 +70,7 @@ export const reviewRoutes: FastifyPluginAsync = async (app) => {
       wicketReversed?: boolean;
       runsChanged?: boolean;
     };
-  }>('/:id/reviews/:reviewId', async (req, reply) => {
+  }>('/:id/reviews/:reviewId', { preHandler: [requireAuth] }, async (req, reply) => {
     const { reviewId } = req.params;
     const { status, revisedDecision, wicketReversed, runsChanged } = req.body;
 

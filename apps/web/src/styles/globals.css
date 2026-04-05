@@ -4,70 +4,716 @@
 
 @layer base {
   :root {
-    --color-green: #1A7C3E;
-    --color-gold: #C8991A;
-    --color-red: #B22222;
-    --color-blue: #1A4D7C;
+    /* Light mode (default — optimized for outdoor scoring) */
+    --bg-primary: #ffffff;
+    --bg-secondary: #f5f5f5;
+    --bg-tertiary: #e5e5e5;
+    --bg-card: rgba(255, 255, 255, 0.9);
+    --bg-card-border: rgba(0, 0, 0, 0.08);
+    --bg-card-hover: rgba(245, 245, 245, 0.95);
+    --bg-glass: rgba(255, 255, 255, 0.7);
+    --bg-glass-border: rgba(0, 0, 0, 0.06);
+    --bg-input: rgba(0, 0, 0, 0.04);
+    --bg-input-border: rgba(0, 0, 0, 0.12);
+    --bg-hover: rgba(0, 0, 0, 0.04);
+
+    --text-primary: #0a0a0a;
+    --text-secondary: #404040;
+    --text-tertiary: #737373;
+    --text-muted: #a3a3a3;
+
+    --border-subtle: rgba(0, 0, 0, 0.06);
+    --border-medium: rgba(0, 0, 0, 0.12);
+
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+
+    /* Scrollbar */
+    --scrollbar-thumb: rgba(0, 0, 0, 0.15);
+    --scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+
+    /* Selection */
+    --selection-bg: rgba(22, 163, 74, 0.2);
+
+    /* Header */
+    --header-bg: rgba(255, 255, 255, 0.8);
+    --header-border: rgba(0, 0, 0, 0.06);
+
+    /* Nav active */
+    --nav-active-bg: rgba(0, 0, 0, 0.06);
+    --nav-active-text: #0a0a0a;
+    --nav-text: #737373;
+    --nav-hover-text: #404040;
+    --nav-hover-bg: rgba(0, 0, 0, 0.04);
+
+    /* Ball bubbles — slightly more opaque in light mode for visibility */
+    --ball-dot-bg: rgba(0, 0, 0, 0.05);
+    --ball-dot-border: rgba(0, 0, 0, 0.08);
+    --ball-dot-text: #a3a3a3;
+    --ball-run-bg: rgba(0, 0, 0, 0.06);
+    --ball-run-border: rgba(0, 0, 0, 0.10);
+    --ball-run-text: #0a0a0a;
+
+    /* Badge completed */
+    --badge-completed-bg: rgba(0, 0, 0, 0.06);
+    --badge-completed-text: #737373;
+
+    /* Outline button */
+    --btn-outline-border: rgba(0, 0, 0, 0.12);
+    --btn-outline-text: #404040;
+    --btn-outline-hover-bg: rgba(0, 0, 0, 0.04);
+    --btn-outline-hover-border: rgba(0, 0, 0, 0.18);
+
+    /* Ghost button */
+    --btn-ghost-text: #737373;
+    --btn-ghost-hover-text: #404040;
+    --btn-ghost-hover-bg: rgba(0, 0, 0, 0.04);
+
+    /* Input text */
+    --input-text: #0a0a0a;
+    --input-placeholder: #a3a3a3;
+
+    /* Label */
+    --label-text: #737373;
+
+    /* Divider */
+    --divider-border: rgba(0, 0, 0, 0.06);
+
+    /* Cricket colors — same in both modes */
+    --color-green: #16a34a;
+    --color-gold: #eab308;
+    --color-red: #ef4444;
+    --color-blue: #3b82f6;
+    --color-purple: #a855f7;
+  }
+
+  .dark {
+    --bg-primary: #0a0a0a;
+    --bg-secondary: #171717;
+    --bg-tertiary: #262626;
+    --bg-card: rgba(23, 23, 23, 0.8);
+    --bg-card-border: rgba(255, 255, 255, 0.06);
+    --bg-card-hover: rgba(31, 31, 31, 0.8);
+    --bg-glass: rgba(255, 255, 255, 0.04);
+    --bg-glass-border: rgba(255, 255, 255, 0.08);
+    --bg-input: rgba(255, 255, 255, 0.04);
+    --bg-input-border: rgba(255, 255, 255, 0.08);
+    --bg-hover: rgba(255, 255, 255, 0.06);
+
+    --text-primary: #fafafa;
+    --text-secondary: #a3a3a3;
+    --text-tertiary: #737373;
+    --text-muted: #525252;
+
+    --border-subtle: rgba(255, 255, 255, 0.06);
+    --border-medium: rgba(255, 255, 255, 0.12);
+
+    --shadow-card: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+    --shadow-card-hover: 0 4px 12px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+
+    --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+
+    --selection-bg: rgba(22, 163, 74, 0.3);
+
+    --header-bg: rgba(10, 10, 10, 0.8);
+    --header-border: rgba(255, 255, 255, 0.06);
+
+    --nav-active-bg: rgba(255, 255, 255, 0.08);
+    --nav-active-text: #f5f5f5;
+    --nav-text: #737373;
+    --nav-hover-text: #e5e5e5;
+    --nav-hover-bg: rgba(255, 255, 255, 0.05);
+
+    --ball-dot-bg: rgba(255, 255, 255, 0.06);
+    --ball-dot-border: rgba(255, 255, 255, 0.06);
+    --ball-dot-text: #525252;
+    --ball-run-bg: rgba(255, 255, 255, 0.08);
+    --ball-run-border: rgba(255, 255, 255, 0.08);
+    --ball-run-text: #f5f5f5;
+
+    --badge-completed-bg: rgba(255, 255, 255, 0.08);
+    --badge-completed-text: #737373;
+
+    --btn-outline-border: rgba(255, 255, 255, 0.1);
+    --btn-outline-text: #e5e5e5;
+    --btn-outline-hover-bg: rgba(255, 255, 255, 0.06);
+    --btn-outline-hover-border: rgba(255, 255, 255, 0.15);
+
+    --btn-ghost-text: #737373;
+    --btn-ghost-hover-text: #e5e5e5;
+    --btn-ghost-hover-bg: rgba(255, 255, 255, 0.06);
+
+    --input-text: #f5f5f5;
+    --input-placeholder: #525252;
+
+    --label-text: #737373;
+
+    --divider-border: rgba(255, 255, 255, 0.06);
   }
 
   html {
     -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
   }
 
-  /* Ensure minimum 44x44px tap targets per context.md */
+  body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    @apply antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(22, 163, 74, 0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(22, 163, 74, 0.03) 0%, transparent 50%);
+    background-attachment: fixed;
+    min-height: 100vh;
+  }
+
+  .dark body {
+    background-image:
+      radial-gradient(ellipse at 20% 0%, rgba(22, 163, 74, 0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 100%, rgba(22, 163, 74, 0.04) 0%, transparent 50%);
+  }
+
   button, a, [role="button"] {
     min-height: 44px;
     min-width: 44px;
   }
 
-  /* Smooth scrolling */
-  html {
-    scroll-behavior: smooth;
-  }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 99px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover); }
 
-  /* Custom scrollbar for dark mode */
-  ::-webkit-scrollbar {
-    width: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: #1e293b;
-  }
-  ::-webkit-scrollbar-thumb {
-    background: #475569;
-    border-radius: 3px;
-  }
+  .scrollbar-none::-webkit-scrollbar { display: none; }
+  .scrollbar-none { -ms-overflow-style: none; scrollbar-width: none; }
+
+  ::selection { background: var(--selection-bg); }
 }
 
 @layer components {
   .score-display {
-    @apply text-5xl font-extrabold tracking-tight;
+    @apply text-6xl font-black tracking-tighter leading-none;
+    font-variant-numeric: tabular-nums;
   }
 
   .card {
-    @apply bg-surface-800 border border-surface-700 rounded-xl p-4;
+    background: var(--bg-card);
+    border: 1px solid var(--bg-card-border);
+    box-shadow: var(--shadow-card);
+    @apply rounded-2xl p-6 backdrop-blur-sm transition-all duration-200;
+  }
+  .card-hover:hover {
+    border-color: var(--border-medium);
+    background: var(--bg-card-hover);
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
+  }
+
+  .glass {
+    background: var(--bg-glass);
+    border: 1px solid var(--bg-glass-border);
+    @apply backdrop-blur-xl rounded-2xl;
   }
 
   .btn-primary {
-    @apply bg-cricket-green text-white font-semibold px-4 py-3 rounded-lg
-           hover:brightness-110 active:brightness-90 transition-all;
+    @apply bg-cricket-green text-white font-semibold px-5 py-3 rounded-xl transition-all duration-150 shadow-sm;
+  }
+  .btn-primary:hover {
+    @apply bg-cricket-green-light;
+    box-shadow: 0 0 20px rgba(22, 163, 74, 0.15);
+  }
+  .btn-primary:active {
+    transform: scale(0.97);
   }
 
   .btn-danger {
-    @apply bg-cricket-red text-white font-semibold px-4 py-3 rounded-lg
-           hover:brightness-110 active:brightness-90 transition-all;
+    background: rgba(239, 68, 68, 0.9);
+    @apply text-white font-semibold px-5 py-3 rounded-xl transition-all duration-150;
+  }
+  .btn-danger:hover {
+    @apply bg-cricket-red;
+  }
+  .btn-danger:active {
+    transform: scale(0.97);
   }
 
   .btn-outline {
-    @apply border border-surface-700 text-surface-200 font-semibold px-4 py-3 rounded-lg
-           hover:bg-surface-800 active:bg-surface-700 transition-all;
+    border: 1px solid var(--btn-outline-border);
+    color: var(--btn-outline-text);
+    @apply font-semibold px-5 py-3 rounded-xl transition-all duration-150;
+  }
+  .btn-outline:hover {
+    background: var(--btn-outline-hover-bg);
+    border-color: var(--btn-outline-hover-border);
+  }
+  .btn-outline:active {
+    transform: scale(0.97);
+  }
+
+  .btn-ghost {
+    color: var(--btn-ghost-text);
+    @apply font-medium px-3 py-2 rounded-xl transition-all duration-150;
+  }
+  .btn-ghost:hover {
+    color: var(--btn-ghost-hover-text);
+    background: var(--btn-ghost-hover-bg);
+  }
+  .btn-ghost:active {
+    transform: scale(0.97);
   }
 
   /* Ball outcome bubbles */
-  .ball-dot { @apply bg-surface-700 text-surface-400; }
-  .ball-run { @apply bg-surface-700 text-surface-50; }
-  .ball-four { @apply bg-cricket-green/20 text-cricket-green border border-cricket-green/40; }
-  .ball-six { @apply bg-purple-600/20 text-purple-400 border border-purple-500/40; }
-  .ball-wicket { @apply bg-cricket-red/20 text-cricket-red border border-cricket-red/40; }
-  .ball-wide { @apply bg-cricket-gold/20 text-cricket-gold; }
-  .ball-noball { @apply bg-orange-500/20 text-orange-400; }
+  .ball-dot {
+    background: var(--ball-dot-bg);
+    border: 1px solid var(--ball-dot-border);
+    color: var(--ball-dot-text);
+  }
+  .ball-run {
+    background: var(--ball-run-bg);
+    border: 1px solid var(--ball-run-border);
+    color: var(--ball-run-text);
+  }
+  .ball-four {
+    background: rgba(22,163,74,0.15);
+    border: 1px solid rgba(22,163,74,0.25);
+    @apply text-cricket-green;
+  }
+  .ball-six {
+    background: rgba(168,85,247,0.15);
+    border: 1px solid rgba(168,85,247,0.25);
+    @apply text-cricket-purple;
+  }
+  .ball-wicket {
+    background: rgba(239,68,68,0.15);
+    border: 1px solid rgba(239,68,68,0.30);
+    @apply text-cricket-red;
+  }
+  .ball-wide {
+    background: rgba(234,179,8,0.12);
+    border: 1px solid rgba(234,179,8,0.20);
+    @apply text-cricket-gold;
+  }
+  .ball-noball {
+    background: rgba(249,115,22,0.12);
+    border: 1px solid rgba(249,115,22,0.20);
+    @apply text-orange-400;
+  }
+  .ball-bye {
+    background: rgba(59,130,246,0.12);
+    border: 1px solid rgba(59,130,246,0.20);
+    @apply text-cricket-blue;
+  }
+  .ball-legbye {
+    background: rgba(20,184,166,0.12);
+    border: 1px solid rgba(20,184,166,0.20);
+    @apply text-teal-400;
+  }
+
+  /* Status badges */
+  .badge {
+    @apply inline-flex items-center gap-1 font-bold uppercase tracking-widest px-2.5 py-1 rounded-full;
+    font-size: 10px;
+  }
+  .badge-live {
+    background: rgba(22,163,74,0.15);
+    box-shadow: 0 0 12px rgba(22, 163, 74, 0.2), 0 0 4px rgba(22, 163, 74, 0.1);
+    @apply text-cricket-green inline-flex items-center gap-1 font-bold uppercase tracking-widest px-2.5 py-1 rounded-full;
+    font-size: 10px;
+  }
+  .badge-scheduled {
+    background: rgba(59,130,246,0.15);
+    @apply text-cricket-blue inline-flex items-center gap-1 font-bold uppercase tracking-widest px-2.5 py-1 rounded-full;
+    font-size: 10px;
+  }
+  .badge-completed {
+    background: var(--badge-completed-bg);
+    color: var(--badge-completed-text);
+    @apply inline-flex items-center gap-1 font-bold uppercase tracking-widest px-2.5 py-1 rounded-full;
+    font-size: 10px;
+  }
+  .badge-delay {
+    background: rgba(234,179,8,0.15);
+    @apply text-cricket-gold inline-flex items-center gap-1 font-bold uppercase tracking-widest px-2.5 py-1 rounded-full;
+    font-size: 10px;
+  }
+
+  /* Input fields */
+  .input {
+    background: var(--bg-input);
+    border: 1px solid var(--bg-input-border);
+    color: var(--input-text);
+    @apply w-full rounded-xl px-4 transition-all duration-200;
+    padding-top: 0.875rem;
+    padding-bottom: 0.875rem;
+  }
+  .input::placeholder {
+    color: var(--input-placeholder);
+  }
+  .input:focus {
+    outline: none;
+    border-color: rgba(22,163,74,0.5);
+    box-shadow: 0 0 0 1px rgba(22,163,74,0.2);
+  }
+
+  .label {
+    color: var(--label-text);
+    @apply block font-semibold uppercase mb-2;
+    font-size: 11px;
+    letter-spacing: 0.1em;
+  }
+
+  .divider {
+    border-top: 1px solid var(--divider-border);
+  }
+
+  /* Theme-aware skeleton/placeholder backgrounds */
+  .skeleton-strong {
+    background: var(--bg-hover);
+  }
+  .skeleton-subtle {
+    background: var(--border-subtle);
+  }
+
+  /* Theme-aware interactive surfaces (used for run buttons, format pickers, etc.) */
+  .surface-interactive {
+    background: var(--bg-input);
+    border: 1px solid var(--bg-input-border);
+    color: var(--text-secondary);
+  }
+  .surface-interactive:hover {
+    background: var(--bg-hover);
+    border-color: var(--border-medium);
+    color: var(--text-primary);
+  }
+
+  /* Muted interactive (dot ball, disabled-looking) */
+  .surface-muted {
+    background: var(--bg-input);
+    border: 1px solid var(--border-subtle);
+    color: var(--text-muted);
+  }
+  .surface-muted:hover {
+    background: var(--bg-hover);
+  }
+
+  /* Theme-aware table rows */
+  .table-row-border {
+    border-top: 1px solid var(--border-subtle);
+  }
+  .table-row-border:hover {
+    background: var(--bg-hover);
+  }
+
+  /* Theme-aware close button */
+  .btn-close {
+    background: var(--bg-hover);
+    color: var(--text-tertiary);
+  }
+  .btn-close:hover {
+    color: var(--text-primary);
+  }
+
+  /* Theme-aware text utilities */
+  .text-theme-primary {
+    color: var(--text-primary);
+  }
+  .text-theme-secondary {
+    color: var(--text-secondary);
+  }
+  .text-theme-tertiary {
+    color: var(--text-tertiary);
+  }
+  .text-theme-muted {
+    color: var(--text-muted);
+  }
+
+  /* Milestone glow for 50+ scores */
+  .milestone-glow {
+    animation: milestone-fade 1.5s ease-out forwards;
+  }
+
+  /* ─── Premium Visual Effects ─────────────────────────────────────── */
+
+  /* Cricket pitch grass texture overlay for score header */
+  .pitch-texture {
+    position: relative;
+    overflow: hidden;
+  }
+  .pitch-texture::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 50% 0%, rgba(22, 163, 74, 0.06) 0%, transparent 60%),
+      radial-gradient(ellipse at 50% 100%, rgba(22, 163, 74, 0.03) 0%, transparent 40%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Glow ring effect for LIVE matches */
+  .live-ring {
+    position: relative;
+  }
+  .live-ring::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: conic-gradient(
+      from 0deg,
+      rgba(22, 163, 74, 0.3),
+      rgba(22, 163, 74, 0.05),
+      rgba(22, 163, 74, 0.3),
+      rgba(22, 163, 74, 0.05),
+      rgba(22, 163, 74, 0.3)
+    );
+    z-index: -1;
+    animation: live-ring-spin 4s linear infinite;
+  }
+
+  /* Score flash — brief highlight on score change */
+  .score-flash {
+    animation: score-flash 0.4s ease-out;
+  }
+
+  /* Run button ripple effect */
+  .btn-ripple {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn-ripple::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle at var(--ripple-x, 50%) var(--ripple-y, 50%), rgba(255,255,255,0.2) 0%, transparent 60%);
+    opacity: 0;
+    transition: opacity 0.15s;
+    pointer-events: none;
+  }
+  .btn-ripple:active::after {
+    opacity: 1;
+  }
+
+  /* Wicket button danger glow */
+  .wicket-glow {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    transition: box-shadow 0.3s ease;
+  }
+  .wicket-glow:hover {
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.15), 0 0 8px rgba(239, 68, 68, 0.1);
+  }
+
+  /* Four button glow */
+  .four-glow:hover {
+    box-shadow: 0 0 24px rgba(22, 163, 74, 0.15), 0 0 8px rgba(22, 163, 74, 0.1);
+  }
+
+  /* Six button glow */
+  .six-glow:hover {
+    box-shadow: 0 0 24px rgba(168, 85, 247, 0.15), 0 0 8px rgba(168, 85, 247, 0.1);
+  }
+
+  /* Subtle noise texture for depth */
+  .noise-subtle::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    pointer-events: none;
+    border-radius: inherit;
+    z-index: 0;
+  }
+
+  /* Refined card with gradient border */
+  .card-premium {
+    background: var(--bg-card);
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    box-shadow: var(--shadow-card);
+    @apply rounded-2xl p-5 backdrop-blur-sm transition-all duration-300;
+  }
+  .card-premium:hover {
+    box-shadow: var(--shadow-card-hover);
+    transform: translateY(-2px);
+  }
+
+  /* Striker indicator — pulsing green dot */
+  .striker-dot {
+    @apply w-2 h-2 rounded-full bg-cricket-green;
+    box-shadow: 0 0 6px rgba(22, 163, 74, 0.4);
+    animation: striker-pulse 2s ease-in-out infinite;
+  }
+
+  /* Tab-style number display for scorecard */
+  .tabular-display {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+
+  /* Smooth gradient divider */
+  .divider-gradient {
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      var(--border-subtle) 20%,
+      var(--border-medium) 50%,
+      var(--border-subtle) 80%,
+      transparent 100%
+    );
+  }
+
+  /* ─── Premium Visual Richness ──────────────────────────────────── */
+
+  /* Cards with subtle gradient border effect */
+  .card-gradient {
+    position: relative;
+    background: var(--bg-card);
+    border-radius: 1rem;
+    padding: 1px;
+    overflow: hidden;
+  }
+  .card-gradient::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(22, 163, 74, 0.3), rgba(16, 185, 129, 0.1), rgba(22, 163, 74, 0.05));
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Bold green-to-emerald gradient background for hero sections */
+  .hero-gradient {
+    background: linear-gradient(135deg, #16a34a 0%, #059669 50%, #0d9488 100%);
+  }
+
+  /* Extra large score display with gradient text */
+  .score-big {
+    @apply text-5xl font-black tracking-tighter leading-none;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, #16a34a, #059669, #10b981);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Green ambient glow shadow */
+  .glow-green {
+    box-shadow: 0 0 20px rgba(22, 163, 74, 0.15), 0 0 8px rgba(22, 163, 74, 0.1);
+  }
+
+  /* Gold glow for special highlights */
+  .glow-gold {
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.2), 0 0 8px rgba(234, 179, 8, 0.15);
+  }
+
+  /* Small green accent bar for card left borders */
+  .accent-bar {
+    position: relative;
+  }
+  .accent-bar::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    border-radius: 4px 0 0 4px;
+    background: linear-gradient(180deg, #16a34a, #059669);
+  }
+
+  /* Subtle green tinted background for highlighted stats */
+  .stat-highlight {
+    background: rgba(22, 163, 74, 0.06);
+    border-radius: 0.75rem;
+    padding: 0.75rem 1rem;
+  }
+
+  /* Gradient text utility */
+  .text-gradient-green {
+    background: linear-gradient(135deg, #16a34a, #059669);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  /* Gradient accent strip (horizontal, for top of cards) */
+  .gradient-strip-top {
+    position: relative;
+  }
+  .gradient-strip-top::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 1rem 1rem 0 0;
+    background: linear-gradient(90deg, #16a34a, #059669, #10b981);
+  }
+
+  /* Header gradient bottom line */
+  .header-gradient-line {
+    position: relative;
+  }
+  .header-gradient-line::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, rgba(22, 163, 74, 0.4), rgba(5, 150, 105, 0.4), transparent);
+  }
+
+  /* Extra chip for scorecard */
+  .extra-chip {
+    @apply inline-flex items-center gap-0.5 px-2 py-0.5 rounded-full text-[11px] font-semibold;
+  }
+}
+
+@keyframes shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+@keyframes milestone-fade {
+  0% { background: rgba(34, 197, 94, 0.08); }
+  100% { background: transparent; }
+}
+
+@keyframes live-ring-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes score-flash {
+  0% { background: rgba(22, 163, 74, 0.12); }
+  100% { background: transparent; }
+}
+
+@keyframes striker-pulse {
+  0%, 100% { opacity: 1; box-shadow: 0 0 6px rgba(22, 163, 74, 0.4); }
+  50% { opacity: 0.7; box-shadow: 0 0 12px rgba(22, 163, 74, 0.6); }
+}
+
+@keyframes gradient-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

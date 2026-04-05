@@ -1,0 +1,134 @@
+/* CricScore global styles — import once at the app entry point.
+   Assumes Tailwind CSS is configured with @cricket/ui tailwind-preset. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Base resets ──────────────────────────────────────────────── */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  html {
+    /* Prevent font scaling in landscape on iOS */
+    -webkit-text-size-adjust: 100%;
+    /* Smooth scroll for anchor navigation */
+    scroll-behavior: smooth;
+    /* Prevent overscroll on the page itself */
+    overscroll-behavior: none;
+  }
+
+  body {
+    @apply bg-surface-900 text-surface-50;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    line-height: 1.5;
+  }
+
+  /* Remove default list styles */
+  ul,
+  ol {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Sensible image defaults */
+  img,
+  video {
+    max-width: 100%;
+    height: auto;
+    display: block;
+  }
+
+  /* Inherit fonts for form controls */
+  input,
+  button,
+  textarea,
+  select {
+    font: inherit;
+  }
+
+  /* Remove default button styles */
+  button {
+    cursor: pointer;
+    border: none;
+    background: none;
+    padding: 0;
+  }
+
+  /* Focus ring — accessible but subtle */
+  :focus-visible {
+    outline: 2px solid #16a34a;
+    outline-offset: 2px;
+  }
+
+  /* Remove animations for users who prefer reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* ── Component utilities ──────────────────────────────────────── */
+@layer components {
+  /* Shimmer skeleton loader */
+  .skeleton {
+    @apply bg-surface-700 rounded-md overflow-hidden relative;
+    background: linear-gradient(
+      90deg,
+      theme('colors.surface.700') 25%,
+      theme('colors.surface.600') 50%,
+      theme('colors.surface.700') 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1800ms linear infinite;
+  }
+
+  /* Live status pulse dot */
+  .live-dot {
+    @apply inline-block w-2 h-2 rounded-full bg-cricket-red;
+    animation: pulseSoft 2000ms cubic-bezier(0.45, 0, 0.55, 1) infinite;
+  }
+
+  /* Score display — large monospace number */
+  .score-display {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: 'tnum';
+  }
+
+  /* Card base */
+  .card {
+    @apply bg-surface-800 rounded-xl border border-surface-700;
+    box-shadow: theme('boxShadow.card');
+    transition: box-shadow 200ms ease, border-color 200ms ease;
+  }
+
+  .card:hover {
+    @apply border-surface-600;
+    box-shadow: theme('boxShadow.card-hover');
+  }
+
+  /* Scrollable area that hides the scrollbar visually */
+  .scroll-hide {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .scroll-hide::-webkit-scrollbar {
+    display: none;
+  }
+}

@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { matchFormatConfig } from '../db/schema/index';
 import { eq } from 'drizzle-orm';
+import { requireAuth, requireRole } from '../middleware/auth';
 
 export const formatConfigRoutes: FastifyPluginAsync = async (app) => {
   // List all format configs
@@ -33,7 +34,7 @@ export const formatConfigRoutes: FastifyPluginAsync = async (app) => {
       hasFollowOn?: boolean;
       ballsPerOver?: number;
     };
-  }>('/', async (req, reply) => {
+  }>('/', { preHandler: [requireAuth, requireRole('admin')] }, async (req, reply) => {
     const [created] = await db.insert(matchFormatConfig).values({
       name: req.body.name,
       oversPerInnings: req.body.oversPerInnings ?? null,
@@ -62,7 +63,7 @@ export const formatConfigRoutes: FastifyPluginAsync = async (app) => {
       hasFollowOn: boolean;
       ballsPerOver: number;
     }>;
-  }>('/:id', async (req, reply) => {
+  }>('/:id', { preHandler: [requireAuth, requireRole('admin')] }, async (req, reply) => {
     const [updated] = await db.update(matchFormatConfig)
       .set(req.body)
       .where(eq(matchFormatConfig.id, req.params.id))

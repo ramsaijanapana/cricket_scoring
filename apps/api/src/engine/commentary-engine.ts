@@ -1,4 +1,4 @@
-import { db } from '../db/index';
+import { db, type TxOrDb } from '../db/index';
 import { commentary } from '../db/schema/index';
 
 /**
@@ -23,7 +23,7 @@ export class CommentaryEngine {
    * Generate commentary for a delivery event.
    * Returns the created commentary record.
    */
-  async generate(ctx: CommentaryContext) {
+  async generate(ctx: CommentaryContext, tx: TxOrDb = db) {
     // 1. Context Builder — enrich with match state
     const enrichedContext = this.buildContext(ctx);
 
@@ -38,7 +38,7 @@ export class CommentaryEngine {
     const dramaLevel = this.computeDramaLevel(category, milestone, ctx);
 
     // 5. Store commentary record
-    const [record] = await db.insert(commentary).values({
+    const [record] = await tx.insert(commentary).values({
       deliveryId: ctx.delivery.id,
       matchId: ctx.matchId,
       inningsNum: ctx.inningsNum,

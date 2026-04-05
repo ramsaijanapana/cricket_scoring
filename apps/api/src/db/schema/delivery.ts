@@ -42,6 +42,7 @@ export const delivery = pgTable('delivery', {
   dismissedId: uuid('dismissed_id').references(() => player.id),  // may differ from striker (run out)
   fielderIds: uuid('fielder_ids').array(),                        // catcher, run-out thrower, etc.
   isRetiredHurt: boolean('is_retired_hurt').notNull().default(false),
+  isDeadBall: boolean('is_dead_ball').notNull().default(false),
 
   // Shot & Pitch Tracking (optional, for analytics) — context.md section 5.2
   shotType: varchar('shot_type', { length: 30 }),     // cut, pull, drive, sweep, etc.
@@ -66,6 +67,9 @@ export const delivery = pgTable('delivery', {
   isOverridden: boolean('is_overridden').notNull().default(false), // true if corrected by a later record
   overrideOfId: uuid('override_of_id').references((): any => delivery.id),  // links correction to original
 
+  // Idempotency key — prevents duplicate submissions from retries
+  clientId: uuid('client_id').unique(),
+
   // Timestamp
   timestamp: timestamp('timestamp', { withTimezone: true }).notNull().defaultNow(),  // ISO 8601
 }, (table) => [
@@ -76,4 +80,6 @@ export const delivery = pgTable('delivery', {
   index('idx_delivery_bowler').on(table.bowlerId),
   index('idx_delivery_undo_stack').on(table.inningsId, table.undoStackPos),
   index('idx_delivery_overridden').on(table.isOverridden),
+  index('idx_delivery_created_at').on(table.timestamp),
+  index('idx_delivery_bowler_innings').on(table.bowlerId, table.inningsId),
 ]);

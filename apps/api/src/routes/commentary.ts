@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { commentary } from '../db/schema/index';
 import { eq, desc } from 'drizzle-orm';
+import { requireAuth } from '../middleware/auth';
 
 /**
  * Commentary routes — context.md section 6.1
@@ -51,7 +52,7 @@ export const commentaryRoutes: FastifyPluginAsync = async (app) => {
   app.patch<{
     Params: { id: string; commentaryId: string };
     Body: { text?: string; text_short?: string; mode?: string };
-  }>('/:id/commentary/:commentaryId', async (req, reply) => {
+  }>('/:id/commentary/:commentaryId', { preHandler: [requireAuth] }, async (req, reply) => {
     const updates: Record<string, any> = {};
     if (req.body.text) updates.text = req.body.text;
     if (req.body.text_short) updates.textShort = req.body.text_short;

@@ -1,8 +1,20 @@
-import Fastify from 'fastify';
+import Fastify, { type FastifyError } from 'fastify';
 import cors from '@fastify/cors';
+import helmet from '@fastify/helmet';
 import fastifyJwt from '@fastify/jwt';
+import rateLimit from '@fastify/rate-limit';
+import fastifyMultipart from '@fastify/multipart';
+import fastifyStatic from '@fastify/static';
+import swagger from '@fastify/swagger';
+import swaggerUi from '@fastify/swagger-ui';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createServer } from 'http';
+import { randomUUID } from 'crypto';
+import { db } from './db/index';
+import { sql } from 'drizzle-orm';
 import { initSocketIO } from './services/realtime';
+import { startTrendingSchedule } from './workers/trending-worker';
 import { teamRoutes } from './routes/teams';
 import { playerRoutes } from './routes/players';
 import { matchRoutes } from './routes/matches';
@@ -15,11 +27,22 @@ import { authRoutes } from './routes/auth';
 import { formatConfigRoutes } from './routes/format-configs';
 import { reviewRoutes } from './routes/reviews';
 import { userRoutes } from './routes/users';
+import { socialRoutes } from './routes/social';
+import { chatRoutes } from './routes/chat';
+import { notificationRoutes } from './routes/notifications';
+import { fantasyRoutes } from './routes/fantasy';
+import { leaderboardRoutes } from './routes/leaderboards';
+import { trendingRoutes } from './routes/trending';
+import { startWorkers } from './workers/index';
+import { env } from './config';
 
-const PORT = parseInt(process.env.PORT || '3001', 10);
-const HOST = process.env.HOST || '0.0.0.0';
+const PORT = env.PORT;
+const HOST = env.HOST;
 
 async function buildApp() {
+  // Create shared HTTP server so both Fastify and Socket.IO use the same port
+  const httpServer = createServer();
+
   const app = Fastify({
     logger: {
       level: 'info',
@@ -28,17 +51,135 @@ async function buildApp() {
         options: { translateTime: 'HH:MM:ss Z', ignore: 'pid,hostname' },
       },
     },
+    serverFactory: (handler) => {
+      httpServer.on('request', handler);
+      return httpServer;
+    },
   });
 
-  await app.register(cors, { origin: true });
+  // ─── Global error handler ──────────────────────────────────────────────────
+  app.setErrorHandler((error: FastifyError, request, reply) => {
+    request.log.error(error);
+
+    if (error.validation) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: error.message },
+      });
+    }
+
+    return reply.status(error.statusCode || 500).send({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: env.NODE_ENV === 'production' ? 'Internal server error' : error.message,
+      },
+    });
+  });
+
+  await app.register(cors, {
+    origin: env.NODE_ENV === 'production'
+      ? env.ALLOWED_ORIGINS.split(',')
+      : true,
+    credentials: true,
+  });
+
+  await app.register(helmet, {
+    contentSecurityPolicy: false, // Disable CSP for development (enable in production)
+    hsts: env.NODE_ENV === 'production' ? { maxAge: 31536000, includeSubDomains: true } : false,
+  });
+
+  // Multipart file uploads (avatar etc.)
+  await app.register(fastifyMultipart, { limits: { fileSize: 2 * 1024 * 1024 } });
+
+  // Serve uploaded files (avatars etc.)
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const uploadsDir = path.resolve(__dirname, '../uploads');
+  await app.register(fastifyStatic, {
+    root: uploadsDir,
+    prefix: '/uploads/',
+    decorateReply: false,
+  });
+
+  // Rate limiting — global: 100 requests/minute
+  await app.register(rateLimit, {
+    max: 100,
+    timeWindow: '1 minute',
+  });
 
   // JWT — context.md section 6.4
   await app.register(fastifyJwt, {
-    secret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
+    secret: env.JWT_SECRET,
+  });
+
+  // ─── OpenAPI / Swagger ───────────────────────────────────────────────────
+  await app.register(swagger, {
+    openapi: {
+      info: {
+        title: 'CricScore API',
+        description: 'Cricket scoring platform API',
+        version: '1.0.0',
+      },
+      servers: [{ url: 'http://localhost:3001' }],
+      components: {
+        securitySchemes: {
+          bearerAuth: {
+            type: 'http',
+            scheme: 'bearer',
+            bearerFormat: 'JWT',
+          },
+        },
+      },
+    },
+  });
+
+  await app.register(swaggerUi, {
+    routePrefix: '/docs',
+  });
+
+  // ─── Request correlation IDs ──────────────────────────────────────────────
+  app.addHook('onRequest', async (request, reply) => {
+    const requestId = (request.headers['x-request-id'] as string) || randomUUID();
+    (request as any).requestId = requestId;
+    reply.header('x-request-id', requestId);
+    request.log = request.log.child({ requestId });
   });
 
   // Health check
-  app.get('/health', async () => ({ status: 'ok', timestamp: new Date().toISOString() }));
+  app.get('/health', async (request, reply) => {
+    const checks: Record<string, string> = {
+      status: 'ok',
+      timestamp: new Date().toISOString(),
+      uptime: `${Math.floor(process.uptime())}s`,
+    };
+
+    // Check database
+    try {
+      await db.execute(sql`SELECT 1`);
+      checks.database = 'ok';
+    } catch {
+      checks.database = 'error';
+      checks.status = 'degraded';
+    }
+
+    const statusCode = checks.status === 'ok' ? 200 : 503;
+    return reply.status(statusCode).send(checks);
+  });
+
+  // Auth middleware — context.md section 6.4
+  // Skip auth for health check and auth endpoints; allow unauthenticated in dev mode
+  app.addHook('onRequest', async (request, reply) => {
+    const url = request.url;
+    if (url === '/health' || url.startsWith('/api/v1/auth') || url.startsWith('/docs')) return;
+
+    const authHeader = request.headers.authorization;
+    if (!authHeader) return; // Allow unauthenticated access (dev mode)
+
+    try {
+      const decoded = await request.jwtVerify();
+      (request as any).user = decoded;
+    } catch (err) {
+      return reply.status(401).send({ error: 'Invalid token' });
+    }
+  });
 
   // ─── REST API routes — context.md section 6.1 ────────────────────────────
 
@@ -74,21 +215,59 @@ async function buildApp() {
   // Users (GDPR) — context.md section 6.1
   app.register(userRoutes, { prefix: '/api/v1/users' });
 
-  return app;
+  // Social — follow system & feed (Phase 2B-2F)
+  app.register(socialRoutes, { prefix: '/api/v1/users' });
+
+  // Chat — messaging (Phase 2B-2F)
+  app.register(chatRoutes, { prefix: '/api/v1/chat' });
+
+  // Notifications (Phase 2B-2F)
+  app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
+
+  // Fantasy (Phase 2B-2F)
+  app.register(fantasyRoutes, { prefix: '/api/v1/fantasy' });
+
+  // Leaderboards (Phase 2B-2F)
+  app.register(leaderboardRoutes, { prefix: '/api/v1/leaderboards' });
+
+  // Trending (Phase 2B-2F)
+  app.register(trendingRoutes, { prefix: '/api/v1/trending' });
+
+  // Attach Socket.IO to the shared HTTP server
+  await initSocketIO(httpServer);
+
+  // Start trending BullMQ repeatable job
+  await startTrendingSchedule();
+
+  return { app, httpServer };
 }
 
 async function start() {
-  const app = await buildApp();
+  const { app, httpServer } = await buildApp();
   await app.ready();
 
-  // Create HTTP server and attach Socket.IO — context.md section 3
-  const httpServer = createServer(app.server);
-  initSocketIO(httpServer);
+  startWorkers();
 
   httpServer.listen(PORT, HOST, () => {
     console.log(`Server running at http://${HOST}:${PORT}`);
     console.log(`WebSocket server ready`);
   });
+
+  // Graceful shutdown
+  const shutdown = async (signal: string) => {
+    console.log(`${signal} received, shutting down gracefully...`);
+    try {
+      await app.close();
+      httpServer.close();
+      process.exit(0);
+    } catch (err) {
+      console.error('Error during shutdown:', err);
+      process.exit(1);
+    }
+  };
+
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 start().catch((err) => {

@@ -2,13 +2,18 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { player, playerTeamMembership } from '../db/schema/index';
 import { eq } from 'drizzle-orm';
+import { parsePagination, paginatedResponse } from '../middleware/pagination';
 
 export const playerRoutes: FastifyPluginAsync = async (app) => {
   // List all players
-  app.get('/', async () => {
-    return db.query.player.findMany({
+  app.get('/', async (req) => {
+    const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>);
+    const players = await db.query.player.findMany({
       orderBy: (p, { asc }) => [asc(p.lastName), asc(p.firstName)],
+      limit,
+      offset,
     });
+    return paginatedResponse(players, page, limit);
   });
 
   // Get player by ID

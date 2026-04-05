@@ -24,6 +24,11 @@ export const match = pgTable('match', {
   isDlsApplied: boolean('is_dls_applied').default(false),
   dlsParScore: integer('dls_par_score'),
   matchOfficials: jsonb('match_officials'),
+  ballType: varchar('ball_type', { length: 20 }),
+  cricketType: varchar('cricket_type', { length: 30 }),
+  isPublic: boolean('is_public').notNull().default(true),
+  isDeleted: boolean('is_deleted').notNull().default(false),
+  deletedAt: timestamp('deleted_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [

@@ -12,6 +12,7 @@ build/
 .env
 .env.local
 .env.*.local
+.env.production
 # IDE
 .vscode/
 .idea/
@@ -31,6 +32,10 @@ coverage/
 *.key
 *.mobileprovision
 *.orig.*
+# Uploads
+uploads/
+# Logs
+*.log
 # Database
 *.sqlite
 *.sqlite3

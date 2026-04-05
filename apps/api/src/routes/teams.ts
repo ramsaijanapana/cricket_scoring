@@ -2,13 +2,19 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { team } from '../db/schema/index';
 import { eq } from 'drizzle-orm';
+import { requireAuth, requireRole } from '../middleware/auth';
+import { parsePagination, paginatedResponse } from '../middleware/pagination';
 
 export const teamRoutes: FastifyPluginAsync = async (app) => {
   // List all teams
-  app.get('/', async () => {
-    return db.query.team.findMany({
+  app.get('/', async (req) => {
+    const { page, limit, offset } = parsePagination(req.query as Record<string, unknown>);
+    const teams = await db.query.team.findMany({
       orderBy: (t, { asc }) => [asc(t.name)],
+      limit,
+      offset,
     });
+    return paginatedResponse(teams, page, limit);
   });
 
   // Get team by ID
@@ -23,7 +29,7 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
   // Create team
   app.post<{
     Body: { name: string; shortName?: string; country?: string; teamType: string; logoUrl?: string };
-  }>('/', async (req, reply) => {
+  }>('/', { preHandler: [requireAuth] }, async (req, reply) => {
     const [newTeam] = await db.insert(team).values({
       name: req.body.name,
       shortName: req.body.shortName,
@@ -38,7 +44,7 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
   app.patch<{
     Params: { id: string };
     Body: Partial<{ name: string; shortName: string; country: string; logoUrl: string }>;
-  }>('/:id', async (req, reply) => {
+  }>('/:id', { preHandler: [requireAuth] }, async (req, reply) => {
     const [updated] = await db.update(team).set({
       ...req.body,
       updatedAt: new Date(),
@@ -48,7 +54,7 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Delete team
-  app.delete<{ Params: { id: string } }>('/:id', async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', { preHandler: [requireAuth, requireRole('admin')] }, async (req, reply) => {
     await db.delete(team).where(eq(team.id, req.params.id));
     return reply.status(204).send();
   });
