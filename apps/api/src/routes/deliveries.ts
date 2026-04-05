@@ -1,6 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { delivery, innings } from '../db/schema/index';
+import { bowlingScorecard } from '../db/schema/scorecard';
 import { scoringEngine } from '../engine/scoring-engine';
 import { broadcast } from '../services/realtime';
 import { eq, and, desc } from 'drizzle-orm';
@@ -37,6 +38,16 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       fielderIds: validated.fielder_id ? [validated.fielder_id] : [],
       shotType: validated.shot_type,
     };
+
+    // Guard: reject deliveries if innings is already completed
+    const liveInnings = await db.query.innings.findFirst({
+      where: and(eq(innings.matchId, req.params.id), eq(innings.status, 'in_progress')),
+    });
+    if (!liveInnings) {
+      return reply.status(400).send({
+        error: { code: 'INNINGS_COMPLETED', message: 'No active innings — innings is already completed or not started' },
+      });
+    }
 
     // Sync conflict detection (context.md section 5.10) — check undo_stack_pos if provided
     if (req.body.expected_stack_pos !== undefined) {
@@ -131,8 +142,15 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    // Broadcast over completion
+    // Broadcast over completion with actual bowler stats
     if (result.overCompleted) {
+      const bowlerCard = await db.query.bowlingScorecard.findFirst({
+        where: and(
+          eq(bowlingScorecard.inningsId, result.delivery.inningsId),
+          eq(bowlingScorecard.playerId, result.delivery.bowlerId),
+        ),
+      });
+
       broadcast.over(req.params.id, {
         overSummary: {
           overNum: result.delivery.overNum,
@@ -143,10 +161,10 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
         },
         bowlerStats: {
           bowlerId: result.delivery.bowlerId,
-          overs: 0,
-          runs: 0,
-          wickets: 0,
-          economy: 0,
+          overs: bowlerCard ? parseFloat(bowlerCard.oversBowled) : 0,
+          runs: bowlerCard?.runsConceded ?? 0,
+          wickets: bowlerCard?.wicketsTaken ?? 0,
+          economy: bowlerCard?.economyRate ? parseFloat(bowlerCard.economyRate) : 0,
         },
         runRate: result.scorecardSnapshot.run_rate,
       });

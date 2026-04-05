@@ -4,19 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-04-05T19:16:25.784Z
+- Updated: 2026-04-05T23:09:10.230Z
 - Branch: main
-- Head: 1da2b79
+- Head: 67d429d
 - Focus: npm command troubleshooting
 
 ## Latest Summary
 
-- Diagnosed npm command resolution in PowerShell and confirmed npm itself is installed and runnable.
-- Verified this shell resolves npm to C:\Program Files\nodejs\npm.ps1, with npm.cmd also available as a reliable fallback.
+- Fixed run-out dismissal selection, innings completion guard, over broadcast stats, dead ball validation
 
 ## Next Steps
 
-- If interactive PowerShell still blocks npm for the user, use npm.cmd or adjust PowerShell execution policy/profile resolution.
+- DLS calculation logic, milestone detection, prediction broadcast
 
 ## Risks / Watchouts
 
@@ -33,31 +32,20 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 129
-- Staged files: 0
-- gitignore
-- apps/api/.env.example
-- apps/api/package.json
-- apps/api/src/db/index.ts
-- apps/api/src/db/schema/delivery.ts
-- apps/api/src/db/schema/index.ts
-- apps/api/src/db/schema/innings.ts
-- apps/api/src/db/schema/match-format.ts
-- apps/api/src/db/schema/match.ts
-- apps/api/src/db/schema/user.ts
-- apps/api/src/db/seed.ts
-- apps/api/src/engine/scoring-engine.ts
-- apps/api/src/routes/auth.ts
-- apps/api/src/routes/commentary.ts
+- Changed files: 4
+- Staged files: 3
+- claude/worktrees/agent-a6aaeee9
+- apps/api/src/middleware/validation.ts
 - apps/api/src/routes/deliveries.ts
-- apps/api/src/routes/format-configs.ts
-- apps/api/src/routes/innings.ts
-- apps/api/src/routes/matches.ts
-- apps/api/src/routes/players.ts
-- apps/api/src/routes/reviews.ts
-- +109 more changed files
+- apps/web/src/pages/ScoringPage.tsx
 
 ## Recent Checkpoints
+
+### 2026-04-05T23:09:10.230Z — npm command troubleshooting
+
+- Actor: ramsa
+- Summary: Fixed run-out dismissal selection, innings completion guard, over broadcast stats, dead ball validation
+- Next: DLS calculation logic, milestone detection, prediction broadcast
 
 ### 2026-04-05T19:16:25.784Z — npm command troubleshooting
 

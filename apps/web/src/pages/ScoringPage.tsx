@@ -128,6 +128,7 @@ export function ScoringPage() {
   const [showWicketModal, setShowWicketModal] = useState(false);
   const [wicketDismissalType, setWicketDismissalType] = useState<string | null>(null);
   const [wicketRunOutRuns, setWicketRunOutRuns] = useState(0);
+  const [runOutDismissedId, setRunOutDismissedId] = useState<string | null>(null);
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [wicketShake, setWicketShake] = useState(false);
@@ -521,8 +522,13 @@ export function ScoringPage() {
     setToastVisible(true);
   }, [currentInnings, extrasMode, deliveryMutation, addRecentBall, battingXi, bowlingXi, currentStrikerId, currentNonStrikerId, currentBowlerId]);
 
-  const recordWicket = useCallback((wicketType: string, runsOnWicket = 0) => {
+  const recordWicket = useCallback((wicketType: string, runsOnWicket = 0, dismissedId?: string) => {
     if (!currentInnings) return;
+
+    // For run-out, the dismissed player can be either striker or non-striker
+    // For all other dismissals, it's always the striker
+    const resolvedDismissedId = dismissedId
+      || currentStrikerId || battingXi[0] || 'unknown';
 
     const input: any = {
       client_id: crypto.randomUUID(),
@@ -535,7 +541,7 @@ export function ScoringPage() {
       extra_type: null,
       is_wicket: true,
       wicket_type: wicketType,
-      dismissed_player_id: currentStrikerId || battingXi[0] || 'unknown',
+      dismissed_player_id: resolvedDismissedId,
       inningsId: currentInnings.id,
     };
 
@@ -550,6 +556,7 @@ export function ScoringPage() {
     setShowWicketModal(false);
     setWicketDismissalType(null);
     setWicketRunOutRuns(0);
+    setRunOutDismissedId(null);
 
     // Trigger shake on wicket button
     setWicketShake(true);
@@ -1255,9 +1262,33 @@ export function ScoringPage() {
                       </div>
                     )}
 
-                    {/* Run-out: runs scored selector */}
+                    {/* Run-out: who was dismissed + runs scored */}
                     {wicketDismissalType === 'run_out' && (
-                      <div>
+                      <div className="flex flex-col gap-3">
+                        <div>
+                          <p className="text-xs text-theme-muted font-semibold mb-2 text-center">Who was run out?</p>
+                          <div className="flex gap-2 justify-center">
+                            {[
+                              { id: currentStrikerId, label: allPlayerNames[currentStrikerId || ''] || 'Striker' },
+                              { id: currentNonStrikerId, label: allPlayerNames[currentNonStrikerId || ''] || 'Non-Striker' },
+                            ].filter(b => b.id).map((b) => (
+                              <motion.button
+                                key={b.id}
+                                onClick={() => setRunOutDismissedId(b.id!)}
+                                aria-pressed={runOutDismissedId === b.id}
+                                whileTap={reduceMotion ? undefined : { scale: 0.92 }}
+                                className={`flex-1 py-2.5 rounded-xl text-xs font-semibold transition-colors duration-150 ${
+                                  runOutDismissedId === b.id
+                                    ? 'bg-cricket-red/20 text-cricket-red border-2 border-cricket-red/40'
+                                    : 'bg-[var(--bg-input)] text-theme-secondary border border-[var(--border-subtle)] hover:bg-[var(--bg-hover)]'
+                                }`}
+                              >
+                                {b.label}
+                              </motion.button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
                         <p className="text-xs text-theme-muted font-semibold mb-2 text-center">Runs completed before run-out</p>
                         <div className="flex gap-2 justify-center">
                           {[0, 1, 2].map((r) => (
@@ -1278,6 +1309,7 @@ export function ScoringPage() {
                           ))}
                         </div>
                       </div>
+                      </div>
                     )}
 
                     {/* Confirm / Back */}
@@ -1292,7 +1324,11 @@ export function ScoringPage() {
                         Back
                       </motion.button>
                       <motion.button
-                        onClick={() => recordWicket(wicketDismissalType, wicketRunOutRuns)}
+                        onClick={() => recordWicket(
+                          wicketDismissalType,
+                          wicketRunOutRuns,
+                          wicketDismissalType === 'run_out' ? (runOutDismissedId || undefined) : undefined,
+                        )}
                         aria-label="Confirm wicket"
                         whileTap={reduceMotion ? undefined : { scale: 0.95 }}
                         className="flex-1 btn-danger text-sm"

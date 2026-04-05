@@ -46,6 +46,9 @@ export const recordDeliverySchema = z.object({
 ).refine(
   d => !d.is_wicket || d.dismissed_player_id !== null,
   { message: 'dismissed_player_id is required when is_wicket is true', path: ['dismissed_player_id'] },
+).refine(
+  d => !(d.is_dead_ball && d.is_wicket),
+  { message: 'A dead ball cannot result in a wicket', path: ['is_dead_ball'] },
 );
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
