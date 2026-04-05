@@ -35,6 +35,10 @@ import { leaderboardRoutes } from './routes/leaderboards';
 import { trendingRoutes } from './routes/trending';
 import { startWorkers } from './workers/index';
 import { env } from './config';
+import { validateEnvironment } from './middleware/env-check';
+
+// Block startup if critical env vars are missing or invalid
+validateEnvironment();
 
 const PORT = env.PORT;
 const HOST = env.HOST;

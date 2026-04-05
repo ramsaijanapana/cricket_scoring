@@ -1,17 +1,18 @@
 import nodemailer from 'nodemailer';
+import { env } from '../config';
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'localhost',
-  port: parseInt(process.env.SMTP_PORT || '587', 10),
-  secure: process.env.SMTP_SECURE === 'true',
-  auth: process.env.SMTP_USER ? {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS,
+  host: env.SMTP_HOST || 'localhost',
+  port: env.SMTP_PORT,
+  secure: env.SMTP_SECURE,
+  auth: env.SMTP_USER ? {
+    user: env.SMTP_USER,
+    pass: env.SMTP_PASS,
   } : undefined,
 });
 
 // For development, log emails instead of sending
-const isDev = process.env.NODE_ENV !== 'production';
+const isDev = env.NODE_ENV !== 'production';
 
 export async function sendEmail(to: string, subject: string, html: string) {
   if (isDev) {
@@ -22,7 +23,7 @@ export async function sendEmail(to: string, subject: string, html: string) {
   }
 
   await transporter.sendMail({
-    from: process.env.SMTP_FROM || 'CricScore <noreply@cricscore.app>',
+    from: env.SMTP_FROM,
     to,
     subject,
     html,
@@ -30,7 +31,7 @@ export async function sendEmail(to: string, subject: string, html: string) {
 }
 
 export async function sendVerificationEmail(email: string, token: string) {
-  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const appUrl = env.APP_URL;
   const link = `${appUrl}/verify-email?token=${token}`;
 
   await sendEmail(email, 'Verify your CricScore email', `
@@ -42,7 +43,7 @@ export async function sendVerificationEmail(email: string, token: string) {
 }
 
 export async function sendPasswordResetEmail(email: string, token: string) {
-  const appUrl = process.env.APP_URL || 'http://localhost:5173';
+  const appUrl = env.APP_URL;
   const link = `${appUrl}/reset-password?token=${token}`;
 
   await sendEmail(email, 'Reset your CricScore password', `

@@ -9,6 +9,7 @@ import { requireAuth, requireRole, getUserId } from '../middleware/auth';
 import { validateBody, createMatchSchema } from '../middleware/validation';
 import { parsePagination, paginatedResponse } from '../middleware/pagination';
 import { cacheGet, cacheSet, invalidateMatchCache } from '../services/cache';
+import { dlsEngine, type DLSInterruption } from '../engine/dls-engine';
 
 // Valid match status transitions
 const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
@@ -440,50 +441,267 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Record interruption (rain/bad-light) — context.md section 6.1
+  // Also captures DLS state at the point of interruption for par-score recalculation.
   app.post<{
     Params: { id: string };
     Body: { reason: string; timestamp?: string };
   }>('/:id/interruption', { preHandler: [requireAuth] }, async (req, reply) => {
+    const matchData = await db.query.match.findFirst({
+      where: eq(match.id, req.params.id),
+    });
+    if (!matchData) return reply.status(404).send({ error: 'Match not found' });
+
+    // Capture current innings state for DLS
+    const liveInnings = await db.query.innings.findFirst({
+      where: and(eq(innings.matchId, req.params.id), eq(innings.status, 'in_progress')),
+    });
+
+    // Build DLS interruption record if there's an active innings
+    let dlsInterruptionData: DLSInterruption | null = null;
+    if (liveInnings) {
+      dlsInterruptionData = {
+        oversAtInterruption: parseFloat(String(liveInnings.totalOvers)) || 0,
+        scoreAtInterruption: liveInnings.totalRuns,
+        wicketsLostAtInterruption: liveInnings.totalWickets,
+        oversLost: 0, // will be filled on resume when revised overs are known
+      };
+    }
+
+    // Store interruption history in match officials JSON (reused for DLS tracking)
+    const existingInterruptions = (matchData.matchOfficials as any)?.dlsInterruptions ?? [];
+    const updatedInterruptions = dlsInterruptionData
+      ? [...existingInterruptions, dlsInterruptionData]
+      : existingInterruptions;
+
     const [updated] = await db.update(match).set({
       status: 'rain_delay',
+      matchOfficials: {
+        ...(matchData.matchOfficials as Record<string, unknown> ?? {}),
+        dlsInterruptions: updatedInterruptions,
+      },
       updatedAt: new Date(),
     }).where(eq(match.id, req.params.id)).returning();
-    if (!updated) return reply.status(404).send({ error: 'Match not found' });
 
     broadcast.status(req.params.id, {
       status: 'rain_delay',
       reason: req.body.reason,
+      dlsInterruption: dlsInterruptionData,
     });
 
     return updated;
   });
 
   // Resume match after interruption — context.md section 6.1
+  // Calculates DLS revised target when overs are reduced.
   app.post<{
     Params: { id: string };
     Body: { timestamp?: string; revised_overs?: number };
   }>('/:id/resume', { preHandler: [requireAuth] }, async (req, reply) => {
-    const [updated] = await db.update(match).set({
+    const matchData = await db.query.match.findFirst({
+      where: eq(match.id, req.params.id),
+    });
+    if (!matchData) return reply.status(404).send({ error: 'Match not found' });
+
+    const formatConfig = await db.query.matchFormatConfig.findFirst({
+      where: eq(matchFormatConfig.id, matchData.formatConfigId),
+    });
+
+    // Fetch all innings for this match
+    const allInnings = await db.query.innings.findMany({
+      where: eq(innings.matchId, req.params.id),
+      orderBy: (i, { asc }) => [asc(i.inningsNumber)],
+    });
+
+    let dlsParScore: number | null = null;
+    let dlsState: { parScore: number; revisedTarget: number | null; team1Resources: number; team2Resources: number } | null = null;
+
+    // Calculate DLS if format supports it and overs were reduced
+    if (formatConfig?.hasDls && req.body.revised_overs != null && formatConfig.oversPerInnings) {
+      const originalOvers = formatConfig.oversPerInnings;
+      const revisedOvers = req.body.revised_overs;
+
+      // Get DLS interruption history
+      const officials = matchData.matchOfficials as Record<string, unknown> ?? {};
+      const dlsInterruptions: DLSInterruption[] = (officials.dlsInterruptions as DLSInterruption[]) ?? [];
+
+      // Update the most recent interruption with overs lost
+      if (dlsInterruptions.length > 0) {
+        const lastInterruption = dlsInterruptions[dlsInterruptions.length - 1];
+
+        // Calculate overs lost: difference between what was available and what's now available
+        const oversUsedAtInterruption = lastInterruption.oversAtInterruption;
+        const oversRemainingBefore = originalOvers - oversUsedAtInterruption;
+        const oversRemainingAfter = revisedOvers - oversUsedAtInterruption;
+        lastInterruption.oversLost = Math.max(0, oversRemainingBefore - oversRemainingAfter);
+      }
+
+      // If we have a completed first innings, calculate revised target for second innings
+      const firstInnings = allInnings.find(i => i.inningsNumber === 1);
+      const secondInnings = allInnings.find(i => i.inningsNumber === 2);
+
+      if (firstInnings && firstInnings.status === 'completed') {
+        const result = dlsEngine.calculateRevisedTarget({
+          team1Score: firstInnings.totalRuns,
+          team1TotalOvers: originalOvers,
+          team1WicketsLost: firstInnings.totalWickets,
+          team1InningsComplete: true,
+          team2TotalOvers: revisedOvers,
+          interruptions: dlsInterruptions,
+        });
+
+        dlsParScore = result.parScore;
+        dlsState = {
+          parScore: result.parScore,
+          revisedTarget: result.revisedTarget,
+          team1Resources: result.team1Resources,
+          team2Resources: result.team2Resources,
+        };
+
+        // Update the second innings target if it exists
+        if (secondInnings) {
+          await db.update(innings).set({
+            targetScore: result.revisedTarget,
+          }).where(eq(innings.id, secondInnings.id));
+        }
+      } else if (firstInnings && firstInnings.status === 'in_progress') {
+        // First innings interrupted — team 1's resources are reduced too
+        const team1Resources = dlsEngine.getResourcePercentage(originalOvers, 0);
+        const team1UsedResources = team1Resources - dlsEngine.getResourcePercentage(
+          Math.max(0, revisedOvers - parseFloat(String(firstInnings.totalOvers))),
+          firstInnings.totalWickets,
+        );
+        dlsParScore = null; // Will be calculated when second innings starts
+      }
+
+      // Store updated interruption history
+      await db.update(match).set({
+        matchOfficials: {
+          ...(matchData.matchOfficials as Record<string, unknown> ?? {}),
+          dlsInterruptions,
+          dlsState,
+        },
+      }).where(eq(match.id, req.params.id));
+    }
+
+    const updateFields: Record<string, unknown> = {
       status: 'live',
       updatedAt: new Date(),
-    }).where(eq(match.id, req.params.id)).returning();
-    if (!updated) return reply.status(404).send({ error: 'Match not found' });
+    };
+    if (dlsParScore !== null) {
+      updateFields.isDlsApplied = true;
+      updateFields.dlsParScore = dlsParScore;
+    }
+
+    const [updated] = await db.update(match).set(updateFields).where(eq(match.id, req.params.id)).returning();
 
     broadcast.status(req.params.id, {
       status: 'resumed',
       reason: 'Match resumed',
+      dlsState,
     });
 
-    return updated;
+    return { ...updated, dlsState };
+  });
+
+  // DLS state — returns current DLS calculation state for a match
+  app.get<{ Params: { id: string } }>('/:id/dls', async (req, reply) => {
+    const matchData = await db.query.match.findFirst({
+      where: eq(match.id, req.params.id),
+    });
+    if (!matchData) return reply.status(404).send({ error: 'Match not found' });
+
+    const formatConfig = await db.query.matchFormatConfig.findFirst({
+      where: eq(matchFormatConfig.id, matchData.formatConfigId),
+    });
+    if (!formatConfig?.hasDls) {
+      return reply.status(400).send({ error: 'DLS is not enabled for this match format' });
+    }
+
+    const allInnings = await db.query.innings.findMany({
+      where: eq(innings.matchId, req.params.id),
+      orderBy: (i, { asc }) => [asc(i.inningsNumber)],
+    });
+
+    const firstInnings = allInnings.find(i => i.inningsNumber === 1);
+    const secondInnings = allInnings.find(i => i.inningsNumber === 2);
+    const originalOvers = formatConfig.oversPerInnings ?? 50;
+
+    const officials = matchData.matchOfficials as Record<string, unknown> ?? {};
+    const dlsInterruptions: DLSInterruption[] = (officials.dlsInterruptions as DLSInterruption[]) ?? [];
+    const storedDlsState = officials.dlsState as Record<string, unknown> | undefined;
+
+    // If no first innings or no interruptions, return baseline state
+    if (!firstInnings) {
+      return {
+        matchId: req.params.id,
+        isDlsApplied: matchData.isDlsApplied,
+        dlsParScore: matchData.dlsParScore,
+        team1Resources: dlsEngine.getResourcePercentage(originalOvers, 0),
+        team2Resources: dlsEngine.getResourcePercentage(originalOvers, 0),
+        revisedTarget: null,
+        parScore: null,
+        interruptions: dlsInterruptions,
+        baselineScore: dlsEngine.getBaselineScore(originalOvers),
+      };
+    }
+
+    // Calculate live DLS state
+    const team1Complete = firstInnings.status === 'completed';
+
+    // Determine effective team 2 overs (may have been reduced)
+    let team2Overs = originalOvers;
+    const totalOversLost = dlsInterruptions.reduce((sum, i) => sum + i.oversLost, 0);
+    if (totalOversLost > 0) {
+      team2Overs = originalOvers - totalOversLost;
+    }
+
+    const result = dlsEngine.calculateRevisedTarget({
+      team1Score: firstInnings.totalRuns,
+      team1TotalOvers: originalOvers,
+      team1WicketsLost: firstInnings.totalWickets,
+      team1InningsComplete: team1Complete,
+      team2TotalOvers: team2Overs,
+      interruptions: dlsInterruptions,
+    });
+
+    // Calculate current par if second innings is in progress
+    let currentPar: number | null = null;
+    if (secondInnings && secondInnings.status === 'in_progress') {
+      currentPar = dlsEngine.getCurrentParScore(
+        firstInnings.totalRuns,
+        originalOvers,
+        team1Complete,
+        team2Overs,
+        parseFloat(String(secondInnings.totalOvers)) || 0,
+        secondInnings.totalWickets,
+        dlsInterruptions,
+      );
+    }
+
+    return {
+      matchId: req.params.id,
+      isDlsApplied: matchData.isDlsApplied,
+      dlsParScore: matchData.dlsParScore,
+      team1Resources: result.team1Resources,
+      team2Resources: result.team2Resources,
+      revisedTarget: result.revisedTarget,
+      parScore: result.parScore,
+      currentPar,
+      interruptions: result.interruptions,
+      baselineScore: dlsEngine.getBaselineScore(originalOvers),
+    };
   });
 
   // Initiate super over — context.md section 6.1
+  // Enforces: max 1 over per side, exactly 2 batsmen, proper innings creation
+  // If both super overs are tied -> compare boundary count -> allow another super over
   app.post<{
     Params: { id: string };
     Body: {
       battingTeamId: string;
       bowlingTeamId: string;
-      battingOrder: string[];
+      battingOrder: string[]; // exactly 2 batsmen for super over
+      bowlerId: string;       // selected bowler
     };
   }>('/:id/super-over', { preHandler: [requireAuth] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
@@ -491,11 +709,79 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!matchData) return reply.status(404).send({ error: 'Match not found' });
 
-    // Create super over innings
+    // Validate format allows super overs
+    const formatConfig = await db.query.matchFormatConfig.findFirst({
+      where: eq(matchFormatConfig.id, matchData.formatConfigId),
+    });
+    if (!formatConfig?.hasSuperOver) {
+      return reply.status(422).send({
+        error: { code: 'FORMAT_RULE_VIOLATION', message: 'Super over is not allowed in this format' },
+      });
+    }
+
+    // Validate exactly 2 batsmen selected
+    if (!req.body.battingOrder || req.body.battingOrder.length !== 2) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: 'Super over requires exactly 2 batsmen' },
+      });
+    }
+
     const existingInnings = await db.query.innings.findMany({
       where: eq(innings.matchId, req.params.id),
+      orderBy: (i, { asc }) => [asc(i.inningsNumber)],
     });
 
+    // Check if there's a completed super-over pair that's tied — compare boundary count
+    const completedSuperOvers = existingInnings.filter(i => i.isSuperOver && i.status === 'completed');
+    if (completedSuperOvers.length >= 2 && completedSuperOvers.length % 2 === 0) {
+      const lastPair = completedSuperOvers.slice(-2);
+      if (lastPair[0].totalRuns === lastPair[1].totalRuns) {
+        // Tied super over — check boundary count from regular innings
+        const regularInnings = existingInnings.filter(i => !i.isSuperOver);
+        if (regularInnings.length >= 2) {
+          const countBoundaries = async (inningsId: string) => {
+            const deliveries = await db.query.delivery.findMany({
+              where: and(eq(delivery.inningsId, inningsId), eq(delivery.isOverridden, false)),
+            });
+            return deliveries.reduce((count, d) => count + (d.runsBatsman === 4 || d.runsBatsman === 6 ? 1 : 0), 0);
+          };
+
+          const [boundaries1, boundaries2] = await Promise.all([
+            countBoundaries(regularInnings[0].id),
+            countBoundaries(regularInnings[1].id),
+          ]);
+
+          // If boundary counts differ, declare winner
+          if (boundaries1 !== boundaries2) {
+            const winnerId = boundaries1 > boundaries2
+              ? regularInnings[0].battingTeamId
+              : regularInnings[1].battingTeamId;
+
+            await db.update(match).set({
+              status: 'completed',
+              winnerTeamId: winnerId,
+              resultSummary: `Won by boundary count (${Math.max(boundaries1, boundaries2)}-${Math.min(boundaries1, boundaries2)})`,
+              updatedAt: new Date(),
+            }).where(eq(match.id, req.params.id));
+
+            broadcast.status(req.params.id, {
+              status: 'completed',
+              reason: 'Match decided by boundary count after tied super over',
+            });
+
+            return reply.status(200).send({
+              matchCompleted: true,
+              winnerId,
+              reason: 'boundary_count',
+              boundaries: { team1: boundaries1, team2: boundaries2 },
+            });
+          }
+          // Boundary counts also tied — allow another super over (fall through)
+        }
+      }
+    }
+
+    // Create super over innings with isSuperOver: true (1 over enforced by scoring engine)
     const [superOverInnings] = await db.insert(innings).values({
       matchId: req.params.id,
       inningsNumber: existingInnings.length + 1,
@@ -504,17 +790,31 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       isSuperOver: true,
       status: 'in_progress',
       startedAt: new Date(),
+      // Set target for 2nd innings of the super over pair
+      targetScore: completedSuperOvers.length % 2 === 1
+        ? completedSuperOvers[completedSuperOvers.length - 1].totalRuns + 1
+        : null,
     }).returning();
 
-    // Initialize batting scorecards
-    const entries = req.body.battingOrder.map((playerId, idx) => ({
+    // Initialize batting scorecards for exactly 2 batsmen
+    const batEntries = req.body.battingOrder.map((playerId, idx) => ({
       inningsId: superOverInnings.id,
       playerId,
       teamId: req.body.battingTeamId,
       battingPosition: idx + 1,
       didNotBat: idx >= 2,
     }));
-    await db.insert(battingScorecard).values(entries);
+    await db.insert(battingScorecard).values(batEntries);
+
+    // Initialize bowling scorecard for selected bowler
+    if (req.body.bowlerId) {
+      await db.insert(bowlingScorecard).values({
+        inningsId: superOverInnings.id,
+        playerId: req.body.bowlerId,
+        teamId: req.body.bowlingTeamId,
+        bowlingPosition: 1,
+      });
+    }
 
     await db.update(match).set({
       status: 'super_over' as any,
@@ -523,10 +823,15 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
 
     broadcast.status(req.params.id, {
       status: 'super_over',
-      reason: 'Super over initiated',
+      reason: `Super over ${Math.ceil((completedSuperOvers.length + 1) / 2)} initiated`,
     });
 
-    return reply.status(201).send(superOverInnings);
+    return reply.status(201).send({
+      innings: superOverInnings,
+      maxOvers: 1,
+      batsmen: req.body.battingOrder,
+      bowler: req.body.bowlerId,
+    });
   });
 
   // Partial match state — context.md section 6.1

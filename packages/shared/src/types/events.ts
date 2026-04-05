@@ -108,6 +108,10 @@ export interface DLSUpdateEvent {
 export interface StatusEvent {
   status: string;
   reason: string;
+  /** DLS interruption data (present when status is 'rain_delay') */
+  dlsInterruption?: unknown;
+  /** DLS calculation state (present when status is 'resumed' with DLS recalculation) */
+  dlsState?: unknown;
 }
 
 // ─── Scorecard Snapshot (embedded in delivery events) ────────────────────────

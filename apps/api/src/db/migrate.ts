@@ -1,9 +1,9 @@
-import 'dotenv/config';
+import { env } from '../config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 import postgres from 'postgres';
 
-const connectionString = process.env.DATABASE_URL || 'postgres://cricket:cricket_dev@localhost:5433/cricket_scoring';
+const connectionString = env.DATABASE_URL;
 
 async function runMigrations() {
   const sql = postgres(connectionString, { max: 1 });

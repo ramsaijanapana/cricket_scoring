@@ -5,6 +5,14 @@ import { matchFormatConfig, match } from '../db/schema/index';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import type { DeliveryInput, Commentary as CommentaryType } from '@cricket/shared';
 import { CommentaryEngine } from './commentary-engine';
+import { dlsEngine } from './dls-engine';
+
+export interface PowerplayInfo {
+  phase: string;         // e.g. "Powerplay", "Middle Overs", "Death Overs"
+  startOver: number;
+  endOver: number;
+  fieldingRestriction: number;
+}
 
 export interface ScoringContext {
   matchId: string;
@@ -15,6 +23,7 @@ export interface ScoringContext {
     ballsPerOver: number;
     maxBowlerOvers: number | null;
     inningsPerSide: number;
+    powerplayConfig: PowerplayInfo[] | null;
   };
   currentOver: {
     id: string;
@@ -29,7 +38,10 @@ export interface ScoringContext {
     totalOvers: number;
     totalExtras: number;
     targetScore: number | null;
+    isSuperOver: boolean;
   };
+  /** Whether DLS has been applied to this match */
+  isDlsApplied: boolean;
   undoStackPos: number;
 }
 
@@ -46,7 +58,10 @@ export interface ScoringResult {
     innings_wickets: number;
     innings_overs: string;
     run_rate: number;
+    powerplay: PowerplayInfo | null;
   };
+  /** DLS par score at this point in the chase (null if DLS not active) */
+  dlsParScore: number | null;
 }
 
 /**
@@ -139,7 +154,11 @@ export class ScoringEngine {
             innings_wickets: context.inningsState.totalWickets,
             innings_overs: String(context.inningsState.totalOvers),
             run_rate: 0,
+            powerplay: activeOver
+              ? this.getCurrentPowerplay(activeOver.overNumber, context.formatConfig.powerplayConfig)
+              : null,
           },
+          dlsParScore: null,
         };
       }
 
@@ -147,7 +166,11 @@ export class ScoringEngine {
       const isLegal = input.extraType !== 'wide' && input.extraType !== 'noball';
       const totalRuns = input.runsBatsman + input.runsExtras;
 
-      // Free-hit detection: check if previous delivery was a no-ball
+      // Free-hit detection with carryover chaining:
+      // A free hit is triggered after a no-ball. The free-hit chain continues if:
+      // 1. The previous delivery was a no-ball (initial trigger), OR
+      // 2. The previous delivery was itself a free-hit and was not a legal delivery
+      //    (i.e., another no-ball or a wide — the free-hit carries over).
       const previousDelivery = await tx.query.delivery.findFirst({
         where: and(
           eq(delivery.inningsId, context.inningsId),
@@ -155,7 +178,9 @@ export class ScoringEngine {
         ),
         orderBy: [desc(delivery.overNum), desc(delivery.ballNum), desc(delivery.undoStackPos)],
       });
-      const isFreeHit = previousDelivery?.extraType === 'noball';
+      const isFreeHit = previousDelivery?.extraType === 'noball'
+        || (previousDelivery?.isFreeHit === true
+            && (previousDelivery?.extraType === 'wide' || previousDelivery?.extraType === 'noball'));
 
       // During free-hit, only run-out dismissals are valid (context.md section 5.10)
       if (isFreeHit && input.isWicket && input.wicketType !== 'run_out') {
@@ -315,13 +340,19 @@ export class ScoringEngine {
       await this.updatePartnership(input, context.inningsId, totalRuns, isLegal, newInningsScore, tx);
 
       // Check completion conditions
+      // Super overs are limited to 1 over and end at 2 wickets (only 2 batsmen)
       const overCompleted = isLegal && newLegalBalls >= ballsPerOver;
+      const effectiveMaxOvers = context.inningsState.isSuperOver
+        ? 1
+        : context.formatConfig.oversPerInnings;
+      const effectiveMaxWickets = context.inningsState.isSuperOver ? 2 : 10;
       const inningsCompleted = this.checkInningsCompletion(
         newInningsWickets,
         overCompleted ? activeOver.overNumber + 1 : null,
-        context.formatConfig.oversPerInnings,
+        effectiveMaxOvers,
         newInningsScore,
         context.inningsState.targetScore,
+        effectiveMaxWickets,
       );
 
       if (overCompleted) {
@@ -354,7 +385,7 @@ export class ScoringEngine {
       if (inningsCompleted) {
         await tx.update(innings).set({
           status: 'completed',
-          allOut: newInningsWickets >= 10,
+          allOut: newInningsWickets >= effectiveMaxWickets,
           endedAt: new Date(),
         }).where(eq(innings.id, context.inningsId));
       }
@@ -371,12 +402,42 @@ export class ScoringEngine {
         input.isWicket, input.dismissedId,
       );
 
+      // Determine current powerplay phase
+      const currentPowerplay = this.getCurrentPowerplay(
+        activeOver.overNumber,
+        context.formatConfig.powerplayConfig,
+      );
+
       const scorecardSnapshot = {
         innings_score: newInningsScore,
         innings_wickets: newInningsWickets,
         innings_overs: inningsOversStr,
         run_rate: currentRunRate,
+        powerplay: currentPowerplay,
       };
+
+      // Calculate live DLS par score if DLS is active during the chase
+      let dlsParScore: number | null = null;
+      if (context.isDlsApplied && context.inningsState.targetScore !== null) {
+        // During a DLS-affected chase, compute par score at this point.
+        // The revised target is already stored on the innings; we compute
+        // what score team 2 needs to be "on par" given resources consumed.
+        const oversRemaining = context.formatConfig.oversPerInnings
+          ? context.formatConfig.oversPerInnings - (oversCompleted + ballsInCurrentOver / context.formatConfig.ballsPerOver)
+          : 0;
+        const resourcesRemaining = dlsEngine.getResourcePercentage(
+          oversRemaining,
+          newInningsWickets,
+        );
+        const totalResources = context.formatConfig.oversPerInnings
+          ? dlsEngine.getResourcePercentage(context.formatConfig.oversPerInnings, 0)
+          : 100;
+        const resourcesUsedPct = totalResources - resourcesRemaining;
+        // Par score = (revisedTarget - 1) * (resourcesUsed / totalResources)
+        if (totalResources > 0) {
+          dlsParScore = Math.round((context.inningsState.targetScore - 1) * (resourcesUsedPct / totalResources));
+        }
+      }
 
       return {
         delivery: newDelivery,
@@ -387,6 +448,7 @@ export class ScoringEngine {
         newStrikerId,
         newNonStrikerId,
         scorecardSnapshot,
+        dlsParScore,
       };
     });
   }
@@ -753,8 +815,9 @@ export class ScoringEngine {
   private checkInningsCompletion(
     wickets: number, completedOverNumber: number | null,
     maxOvers: number | null, runs: number, target: number | null,
+    maxWickets: number = 10,
   ): boolean {
-    if (wickets >= 10) return true;
+    if (wickets >= maxWickets) return true;
     if (completedOverNumber !== null && maxOvers !== null && completedOverNumber >= maxOvers) return true;
     if (target !== null && runs >= target) return true;
     return false;
@@ -810,6 +873,7 @@ export class ScoringEngine {
         ballsPerOver: formatConfig.ballsPerOver,
         maxBowlerOvers: formatConfig.maxBowlerOvers,
         inningsPerSide: formatConfig.inningsPerSide,
+        powerplayConfig: formatConfig.powerplayConfig as PowerplayInfo[] | null,
       },
       currentOver: latestOver ? {
         id: latestOver.id,
@@ -824,7 +888,9 @@ export class ScoringEngine {
         totalOvers: parseFloat(inningsData.totalOvers),
         totalExtras: inningsData.totalExtras,
         targetScore: inningsData.targetScore,
+        isSuperOver: inningsData.isSuperOver,
       },
+      isDlsApplied: matchData.isDlsApplied ?? false,
       undoStackPos: latestDelivery?.undoStackPos ?? 0,
     };
   }
@@ -990,6 +1056,46 @@ export class ScoringEngine {
           .where(eq(fieldingScorecard.id, existing.id));
       }
     }
+  }
+
+  /**
+   * Determine the current powerplay phase based on the over number.
+   * Returns null if no powerplay config exists or the over is outside all phases.
+   */
+  getCurrentPowerplay(overNumber: number, config: PowerplayInfo[] | null): PowerplayInfo | null {
+    if (!config || config.length === 0) return null;
+    // overNumber is 0-indexed; powerplay config uses 1-indexed overs
+    const currentOver1Indexed = overNumber + 1;
+    return config.find(pp => currentOver1Indexed >= pp.startOver && currentOver1Indexed <= pp.endOver) ?? null;
+  }
+
+  /**
+   * Calculate bonus points for first-class matches.
+   * Batting bonus: based on runs scored in first 110 overs.
+   * Bowling bonus: based on wickets taken.
+   */
+  calculateBonusPoints(
+    runsInFirst110Overs: number,
+    wicketsTaken: number,
+    format: 'first_class' | string,
+  ): { battingBonus: number; bowlingBonus: number } {
+    if (format !== 'first_class' && format !== 'Test') {
+      return { battingBonus: 0, bowlingBonus: 0 };
+    }
+
+    let battingBonus = 0;
+    if (runsInFirst110Overs >= 350) battingBonus = 4;
+    else if (runsInFirst110Overs >= 300) battingBonus = 3;
+    else if (runsInFirst110Overs >= 250) battingBonus = 2;
+    else if (runsInFirst110Overs >= 200) battingBonus = 1;
+
+    let bowlingBonus = 0;
+    if (wicketsTaken >= 9) bowlingBonus = 4;
+    else if (wicketsTaken >= 7) bowlingBonus = 3;
+    else if (wicketsTaken >= 5) bowlingBonus = 2;
+    else if (wicketsTaken >= 3) bowlingBonus = 1;
+
+    return { battingBonus, bowlingBonus };
   }
 
   private isBowlerWicket(wicketType?: string | null): boolean {

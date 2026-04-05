@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-04-05T23:27:55.022Z
+- Updated: 2026-04-05T23:42:14.226Z
 - Branch: main
-- Head: 2db3d8b
+- Head: 3b7e158
 - Focus: npm command troubleshooting
 
 ## Latest Summary
 
-- All gaps filled, enhancements backlog created
+- Sprint 1-2: DLS engine, secrets management, CI/CD, load tests, engine rules (free-hit chain, powerplay, batting order, sessions, bonus points, super over)
 
 ## Next Steps
 
-- Sprint 1: DLS calculation, secrets management, load testing
+- Sprint 3-5: UI/UX, analytics charts, infrastructure
 
 ## Risks / Watchouts
 
@@ -32,12 +32,37 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 2
+- Changed files: 43
 - Staged files: 0
 - claude/worktrees/agent-a6aaeee9
-- ENHANCEMENTS.md
+- .github/workflows/ci.yml
+- .gitignore
+- apps/api/.env.example
+- apps/api/Dockerfile
+- apps/api/package.json
+- apps/api/src/config.ts
+- apps/api/src/db/index.ts
+- apps/api/src/db/migrate.ts
+- apps/api/src/db/schema/match-format.ts
+- apps/api/src/db/seed.ts
+- apps/api/src/engine/scoring-engine.test.ts
+- apps/api/src/engine/scoring-engine.ts
+- apps/api/src/middleware/auth.ts
+- apps/api/src/routes/auth.ts
+- apps/api/src/routes/deliveries.ts
+- apps/api/src/routes/innings.ts
+- apps/api/src/routes/matches.ts
+- apps/api/src/server.ts
+- apps/api/src/services/email-service.ts
+- +23 more changed files
 
 ## Recent Checkpoints
+
+### 2026-04-05T23:42:14.226Z — npm command troubleshooting
+
+- Actor: ramsa
+- Summary: Sprint 1-2: DLS engine, secrets management, CI/CD, load tests, engine rules (free-hit chain, powerplay, batting order, sessions, bonus points, super over)
+- Next: Sprint 3-5: UI/UX, analytics charts, infrastructure
 
 ### 2026-04-05T23:27:55.022Z — npm command troubleshooting
 
@@ -63,13 +88,6 @@
 - Summary: Diagnosed npm command resolution in PowerShell and confirmed npm itself is installed and runnable. | Verified this shell resolves npm to C:\Program Files\nodejs\npm.ps1, with npm.cmd also available as a reliable fallback.
 - Next: If interactive PowerShell still blocks npm for the user, use npm.cmd or adjust PowerShell execution policy/profile resolution.
 - Verified: Ran npm run context:status successfully. | Ran npm -v successfully and confirmed npm resolves to npm.ps1 plus npm.cmd via Get-Command and where.exe.
-
-### 2026-04-05T13:33:06.205Z — Agent context workflow setup
-
-- Actor: ramsa
-- Summary: Installed the reusable agent handoff workflow in this repository. | Corrected the README handoff section so it no longer points to a missing bootstrap script.
-- Next: Use context:update after each meaningful change and refresh the handoff again before stopping work.
-- Verified: Ran node scripts/context-handoff.mjs status successfully. | Confirmed the pre-commit hook runs scripts/context-handoff.mjs check --staged.
 
 ## Workflow Rule
 

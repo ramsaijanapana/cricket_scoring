@@ -22,7 +22,11 @@
     "context:compact": "node scripts/context-handoff.mjs compact",
     "context:status": "node scripts/context-handoff.mjs status",
     "context:watch": "node scripts/context-handoff.mjs watch",
-    "context:check": "node scripts/context-handoff.mjs check --staged"
+    "context:check": "node scripts/context-handoff.mjs check --staged",
+    "test:load": "k6 run scripts/load-tests/stress-test.js",
+    "test:load:delivery": "k6 run scripts/load-tests/delivery-throughput.js",
+    "test:load:spectator": "k6 run scripts/load-tests/spectator-load.js",
+    "test:load:ws": "k6 run scripts/load-tests/websocket-connections.js"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.58.0",

@@ -2,7 +2,9 @@ import { Queue } from 'bullmq';
 import { db } from '../db/index';
 import { activity } from '../db/schema/activity';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+import { env } from '../config';
+
+const REDIS_URL = env.REDIS_URL;
 
 const feedQueue = new Queue('feed-fanout', {
   connection: { url: REDIS_URL },

@@ -1,27 +1,27 @@
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from '@aws-sdk/client-s3';
+import { env } from '../config';
 
-const useS3 = !!process.env.S3_BUCKET;
+const useS3 = !!env.S3_BUCKET;
 
 const s3 = useS3 ? new S3Client({
-  region: process.env.S3_REGION || 'us-east-1',
-  ...(process.env.S3_ENDPOINT ? {
-    endpoint: process.env.S3_ENDPOINT,
+  region: env.S3_REGION,
+  ...(env.S3_ENDPOINT ? {
+    endpoint: env.S3_ENDPOINT,
     forcePathStyle: true, // For R2/MinIO compatibility
   } : {}),
 }) : null;
 
 export async function uploadFile(key: string, buffer: Buffer, contentType: string): Promise<string> {
-  if (s3 && process.env.S3_BUCKET) {
+  if (s3 && env.S3_BUCKET) {
     await s3.send(new PutObjectCommand({
-      Bucket: process.env.S3_BUCKET,
+      Bucket: env.S3_BUCKET,
       Key: key,
       Body: buffer,
       ContentType: contentType,
     }));
 
-    const cdnUrl = process.env.S3_CDN_URL;
-    if (cdnUrl) return `${cdnUrl}/${key}`;
-    return `https://${process.env.S3_BUCKET}.s3.${process.env.S3_REGION || 'us-east-1'}.amazonaws.com/${key}`;
+    if (env.S3_CDN_URL) return `${env.S3_CDN_URL}/${key}`;
+    return `https://${env.S3_BUCKET}.s3.${env.S3_REGION}.amazonaws.com/${key}`;
   }
 
   // Fallback to local storage (dev mode)
@@ -41,9 +41,9 @@ export async function uploadFile(key: string, buffer: Buffer, contentType: strin
 }
 
 export async function deleteFile(key: string): Promise<void> {
-  if (s3 && process.env.S3_BUCKET) {
+  if (s3 && env.S3_BUCKET) {
     await s3.send(new DeleteObjectCommand({
-      Bucket: process.env.S3_BUCKET,
+      Bucket: env.S3_BUCKET,
       Key: key,
     }));
     return;

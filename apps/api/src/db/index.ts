@@ -3,13 +3,12 @@ import postgres from 'postgres';
 import type { ExtractTablesWithRelations } from 'drizzle-orm';
 import type { PgTransaction, PgQueryResultHKT } from 'drizzle-orm/pg-core';
 import * as schema from './schema/index';
+import { env } from '../config';
 
-const connectionString = process.env.DATABASE_URL || 'postgres://cricket:cricket_dev@localhost:5433/cricket_scoring';
-
-const sql = postgres(connectionString, {
-  max: 20,
-  idle_timeout: 20,
-  connect_timeout: 10,
+const sql = postgres(env.DATABASE_URL, {
+  max: env.DB_POOL_MAX,
+  idle_timeout: env.DB_IDLE_TIMEOUT,
+  connect_timeout: env.DB_CONNECT_TIMEOUT,
 });
 export const db = drizzle(sql, { schema });
 

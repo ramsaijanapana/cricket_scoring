@@ -1,6 +1,8 @@
 import { Queue } from 'bullmq';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+import { env } from '../config';
+
+const REDIS_URL = env.REDIS_URL;
 
 const notificationQueue = new Queue('notifications', {
   connection: { url: REDIS_URL },

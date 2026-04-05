@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import '../config'; // ensure env is loaded
 import { db } from './index';
 import { matchFormatConfig, team, match, matchTeam, appUser } from './schema/index';
 import { player } from './schema/player';

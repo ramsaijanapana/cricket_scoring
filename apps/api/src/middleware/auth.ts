@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
+import { env } from '../config';
 
-const isDev = process.env.NODE_ENV !== 'production';
+const isDev = env.NODE_ENV !== 'production';
 
 export async function requireAuth(request: FastifyRequest, reply: FastifyReply) {
   const user = (request as any).user;

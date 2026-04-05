@@ -2,7 +2,9 @@ import { Worker, type Job } from 'bullmq';
 import { db } from '../db/index';
 import { notification } from '../db/schema/notification';
 
-const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+import { env } from '../config';
+
+const REDIS_URL = env.REDIS_URL;
 
 interface NotificationJob {
   userId: string;

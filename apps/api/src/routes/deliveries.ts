@@ -379,6 +379,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       newStrikerId: result.newStrikerId,
       newNonStrikerId: result.newNonStrikerId,
       scorecardSnapshot: result.scorecardSnapshot,
+      powerplay: result.scorecardSnapshot.powerplay,
     });
   });
 

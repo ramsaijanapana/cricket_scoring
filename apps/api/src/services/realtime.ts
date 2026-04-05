@@ -5,6 +5,7 @@ import Redis from 'ioredis';
 import { db } from '../db/index';
 import { chatMember } from '../db/schema/chat';
 import { eq, and } from 'drizzle-orm';
+import { env } from '../config';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -26,8 +27,8 @@ let socialNsp: Namespace | null = null;
 export async function initSocketIO(httpServer: HttpServer): Promise<SocketIOServer> {
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.NODE_ENV === 'production'
-        ? (process.env.ALLOWED_ORIGINS || 'https://cricscore.app').split(',')
+      origin: env.NODE_ENV === 'production'
+        ? env.ALLOWED_ORIGINS.split(',')
         : '*',
       credentials: true,
     },
@@ -36,7 +37,7 @@ export async function initSocketIO(httpServer: HttpServer): Promise<SocketIOServ
 
   // Redis adapter for multi-instance horizontal scaling
   try {
-    const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+    const pubClient = new Redis(env.REDIS_URL);
     const subClient = pubClient.duplicate();
 
     await Promise.all([pubClient.ping(), subClient.ping()]);

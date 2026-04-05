@@ -1,8 +1,9 @@
 import { Worker, Queue } from 'bullmq';
 import Redis from 'ioredis';
 import { computeTrending } from '../services/trending-service';
+import { env } from '../config';
 
-const connection = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', { maxRetriesPerRequest: null });
+const connection = new Redis(env.REDIS_URL, { maxRetriesPerRequest: null });
 
 export const trendingQueue = new Queue('trending', {
   connection,

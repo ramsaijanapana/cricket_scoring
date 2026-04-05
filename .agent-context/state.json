@@ -1,14 +1,14 @@
 {
   "project": "cricket_scoring",
-  "updatedAt": "2026-04-05T23:27:55.022Z",
+  "updatedAt": "2026-04-05T23:42:14.226Z",
   "branch": "main",
-  "head": "2db3d8b",
+  "head": "3b7e158",
   "currentFocus": "npm command troubleshooting",
   "latestSummary": [
-    "All gaps filled, enhancements backlog created"
+    "Sprint 1-2: DLS engine, secrets management, CI/CD, load tests, engine rules (free-hit chain, powerplay, batting order, sessions, bonus points, super over)"
   ],
   "nextSteps": [
-    "Sprint 1: DLS calculation, secrets management, load testing"
+    "Sprint 3-5: UI/UX, analytics charts, infrastructure"
   ],
   "risks": [
     "Interactive PowerShell may still fail on machines where npm.ps1 is blocked by execution policy even though npm works in non-interactive runners."
@@ -23,11 +23,111 @@
   "workingTree": {
     "changedFiles": [
       "claude/worktrees/agent-a6aaeee9",
-      "ENHANCEMENTS.md"
+      ".github/workflows/ci.yml",
+      ".gitignore",
+      "apps/api/.env.example",
+      "apps/api/Dockerfile",
+      "apps/api/package.json",
+      "apps/api/src/config.ts",
+      "apps/api/src/db/index.ts",
+      "apps/api/src/db/migrate.ts",
+      "apps/api/src/db/schema/match-format.ts",
+      "apps/api/src/db/seed.ts",
+      "apps/api/src/engine/scoring-engine.test.ts",
+      "apps/api/src/engine/scoring-engine.ts",
+      "apps/api/src/middleware/auth.ts",
+      "apps/api/src/routes/auth.ts",
+      "apps/api/src/routes/deliveries.ts",
+      "apps/api/src/routes/innings.ts",
+      "apps/api/src/routes/matches.ts",
+      "apps/api/src/server.ts",
+      "apps/api/src/services/email-service.ts",
+      "apps/api/src/services/feed-service.ts",
+      "apps/api/src/services/notification-service.ts",
+      "apps/api/src/services/realtime.ts",
+      "apps/api/src/services/storage-service.ts",
+      "apps/api/src/workers/feed-worker.ts",
+      "apps/api/src/workers/notification-worker.ts",
+      "apps/api/src/workers/trending-worker.ts",
+      "apps/web/package.json",
+      "package-lock.json",
+      "package.json",
+      "packages/shared/src/types/events.ts",
+      "turbo.json",
+      ".github/workflows/deploy.yml",
+      "apps/api/src/engine/dls-engine.test.ts",
+      "apps/api/src/engine/dls-engine.ts",
+      "apps/api/src/middleware/env-check.ts",
+      "apps/web/Dockerfile",
+      "scripts/load-tests/README.md",
+      "scripts/load-tests/config.js",
+      "scripts/load-tests/delivery-throughput.js",
+      "scripts/load-tests/spectator-load.js",
+      "scripts/load-tests/stress-test.js",
+      "scripts/load-tests/websocket-connections.js"
     ],
     "stagedFiles": []
   },
   "recentCheckpoints": [
+    {
+      "updatedAt": "2026-04-05T23:42:14.226Z",
+      "actor": "ramsa",
+      "focus": "npm command troubleshooting",
+      "summary": [
+        "Sprint 1-2: DLS engine, secrets management, CI/CD, load tests, engine rules (free-hit chain, powerplay, batting order, sessions, bonus points, super over)"
+      ],
+      "nextSteps": [
+        "Sprint 3-5: UI/UX, analytics charts, infrastructure"
+      ],
+      "risks": [],
+      "decisions": [],
+      "verification": [],
+      "changedFiles": [
+        "claude/worktrees/agent-a6aaeee9",
+        ".github/workflows/ci.yml",
+        ".gitignore",
+        "apps/api/.env.example",
+        "apps/api/Dockerfile",
+        "apps/api/package.json",
+        "apps/api/src/config.ts",
+        "apps/api/src/db/index.ts",
+        "apps/api/src/db/migrate.ts",
+        "apps/api/src/db/schema/match-format.ts",
+        "apps/api/src/db/seed.ts",
+        "apps/api/src/engine/scoring-engine.test.ts",
+        "apps/api/src/engine/scoring-engine.ts",
+        "apps/api/src/middleware/auth.ts",
+        "apps/api/src/routes/auth.ts",
+        "apps/api/src/routes/deliveries.ts",
+        "apps/api/src/routes/innings.ts",
+        "apps/api/src/routes/matches.ts",
+        "apps/api/src/server.ts",
+        "apps/api/src/services/email-service.ts",
+        "apps/api/src/services/feed-service.ts",
+        "apps/api/src/services/notification-service.ts",
+        "apps/api/src/services/realtime.ts",
+        "apps/api/src/services/storage-service.ts",
+        "apps/api/src/workers/feed-worker.ts",
+        "apps/api/src/workers/notification-worker.ts",
+        "apps/api/src/workers/trending-worker.ts",
+        "apps/web/package.json",
+        "package-lock.json",
+        "package.json",
+        "packages/shared/src/types/events.ts",
+        "turbo.json",
+        ".github/workflows/deploy.yml",
+        "apps/api/src/engine/dls-engine.test.ts",
+        "apps/api/src/engine/dls-engine.ts",
+        "apps/api/src/middleware/env-check.ts",
+        "apps/web/Dockerfile",
+        "scripts/load-tests/README.md",
+        "scripts/load-tests/config.js",
+        "scripts/load-tests/delivery-throughput.js",
+        "scripts/load-tests/spectator-load.js",
+        "scripts/load-tests/stress-test.js",
+        "scripts/load-tests/websocket-connections.js"
+      ]
+    },
     {
       "updatedAt": "2026-04-05T23:27:55.022Z",
       "actor": "ramsa",

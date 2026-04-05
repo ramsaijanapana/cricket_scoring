@@ -8,8 +8,9 @@ import { appUser } from '../db/schema/index';
 import { validateBody, registerSchema, loginSchema } from '../middleware/validation';
 import { sanitizeUser } from '../middleware/serialize';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../services/email-service';
+import { env } from '../config';
 
-const redis = new Redis(process.env.REDIS_URL || 'redis://localhost:6379');
+const redis = new Redis(env.REDIS_URL);
 const ACCESS_TOKEN_EXPIRY = '1h';
 const REFRESH_TOKEN_TTL_SECONDS = 7 * 24 * 60 * 60; // 7 days
 const RESET_TOKEN_TTL_SECONDS = 60 * 60; // 1 hour
