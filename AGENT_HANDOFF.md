@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-04-05T23:09:10.230Z
+- Updated: 2026-04-05T23:23:56.729Z
 - Branch: main
-- Head: 67d429d
+- Head: 9fe7ecf
 - Focus: npm command troubleshooting
 
 ## Latest Summary
 
-- Fixed run-out dismissal selection, innings completion guard, over broadcast stats, dead ball validation
+- Added milestone detection, win predictions, Redis caching, completion UI, partnership broadcast
 
 ## Next Steps
 
-- DLS calculation logic, milestone detection, prediction broadcast
+- Enhancement backlog — see ENHANCEMENTS.md
 
 ## Risks / Watchouts
 
@@ -32,14 +32,24 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 4
-- Staged files: 3
+- Changed files: 8
+- Staged files: 0
 - claude/worktrees/agent-a6aaeee9
-- apps/api/src/middleware/validation.ts
+- apps/api/src/engine/scoring-engine.ts
 - apps/api/src/routes/deliveries.ts
+- apps/api/src/routes/matches.ts
+- apps/api/src/routes/scorecard.ts
 - apps/web/src/pages/ScoringPage.tsx
+- packages/shared/src/types/events.ts
+- apps/api/src/services/cache.ts
 
 ## Recent Checkpoints
+
+### 2026-04-05T23:23:56.729Z — npm command troubleshooting
+
+- Actor: ramsa
+- Summary: Added milestone detection, win predictions, Redis caching, completion UI, partnership broadcast
+- Next: Enhancement backlog — see ENHANCEMENTS.md
 
 ### 2026-04-05T23:09:10.230Z — npm command troubleshooting
 

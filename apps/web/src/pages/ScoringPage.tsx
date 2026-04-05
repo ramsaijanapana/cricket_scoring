@@ -1,9 +1,10 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Undo2, X, ChevronLeft, AlertTriangle, Trophy, ArrowLeft, ArrowLeftRight, ChevronDown } from 'lucide-react';
+import { Undo2, X, ChevronLeft, AlertTriangle, Trophy, ArrowLeft, ArrowLeftRight, ChevronDown, TrendingUp, BarChart3 } from 'lucide-react';
+import type { PredictionEvent } from '@cricket/shared';
 import { api, ApiError } from '../lib/api';
 import { joinMatch, leaveMatch, getSocket, WS_EVENTS } from '../lib/socket';
 import { offlineStore } from '../lib/offline-store';
@@ -112,6 +113,7 @@ function UndoToast({ message, visible, onUndo, onDismiss, reduceMotion }: UndoTo
 
 export function ScoringPage() {
   const { id: matchId } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isOnline = useOnlineStatus();
   const prefersReducedMotion = useReducedMotion();
@@ -132,6 +134,7 @@ export function ScoringPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [wicketShake, setWicketShake] = useState(false);
+  const [milestoneToast, setMilestoneToast] = useState<{ text: string; type: string } | null>(null);
 
   // Track current on-strike players (updated from API response after each delivery)
   const [currentStrikerId, setCurrentStrikerId] = useState<string | null>(null);
@@ -143,6 +146,16 @@ export function ScoringPage() {
   const [isFreeHit, setIsFreeHit] = useState(false);
   const [showNewBatsmanModal, setShowNewBatsmanModal] = useState(false);
   const [dismissedPlayerId, setDismissedPlayerId] = useState<string | null>(null);
+
+  // Innings/match completion state
+  const [inningsCompleted, setInningsCompleted] = useState(false);
+  const [matchCompleted, setMatchCompleted] = useState(false);
+  const [completionInfo, setCompletionInfo] = useState<{
+    teamName: string; score: number; wickets: number; overs: string; resultSummary?: string;
+  } | null>(null);
+
+  // Win prediction (2nd innings chase)
+  const [prediction, setPrediction] = useState<PredictionEvent | null>(null);
 
   // Manual strike swap
   const swapStrike = useCallback(() => {
@@ -182,7 +195,35 @@ export function ScoringPage() {
   });
 
   const currentInnings = matchData?.innings?.find((i: any) => i.status === 'in_progress');
+  const completedInnings = matchData?.innings?.find((i: any) => i.status === 'completed');
   const needsStart = matchData && !currentInnings && matchData.status !== 'completed';
+
+  // Check if innings/match is already completed on mount or data refresh
+  useEffect(() => {
+    if (!matchData) return;
+    if (matchData.status === 'completed') {
+      setMatchCompleted(true);
+      setInningsCompleted(true);
+      const lastInnings = matchData.innings?.[matchData.innings.length - 1] as any;
+      setCompletionInfo({
+        teamName: matchData.teams?.find((t: any) => t.teamId === lastInnings?.battingTeamId)?.teamName || 'Team',
+        score: lastInnings?.totalRuns ?? 0,
+        wickets: lastInnings?.totalWickets ?? 0,
+        overs: lastInnings?.totalOvers ?? '0.0',
+        resultSummary: matchData.resultSummary || undefined,
+      });
+    } else if (!currentInnings && completedInnings) {
+      // Innings completed but match not over — waiting for next innings
+      setInningsCompleted(true);
+      setMatchCompleted(false);
+      setCompletionInfo({
+        teamName: matchData.teams?.find((t: any) => t.teamId === completedInnings?.battingTeamId)?.teamName || 'Team',
+        score: (completedInnings as any)?.totalRuns ?? 0,
+        wickets: (completedInnings as any)?.totalWickets ?? 0,
+        overs: (completedInnings as any)?.totalOvers ?? '0.0',
+      });
+    }
+  }, [matchData?.status, currentInnings?.id, completedInnings?.id]);
 
   // WebSocket subscription
   useEffect(() => {
@@ -208,11 +249,24 @@ export function ScoringPage() {
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
     });
 
+    const milestoneEvent = WS_EVENTS.milestone(matchId);
+    socket.on(milestoneEvent, (data: { text: string; type: string }) => {
+      setMilestoneToast({ text: data.text, type: data.type });
+      setTimeout(() => setMilestoneToast(null), 5000);
+    });
+
+    const predictionEvent = WS_EVENTS.prediction(matchId);
+    socket.on(predictionEvent, (data: PredictionEvent) => {
+      setPrediction(data);
+    });
+
     return () => {
       leaveMatch(matchId);
       socket.off(deliveryEvent);
       socket.off(wicketEvent);
       socket.off(overEvent);
+      socket.off(milestoneEvent);
+      socket.off(predictionEvent);
     };
   }, [matchId]);
 
@@ -319,6 +373,28 @@ export function ScoringPage() {
           setLastOverBowlerId(currentBowlerId);
           setShowBowlerSelect(true);
           setPendingBowlerChange(true);
+        }
+
+        // Innings / match completion
+        if (result.inningsCompleted) {
+          setInningsCompleted(true);
+          setCompletionInfo({
+            teamName: battingTeam?.teamName || 'Batting Team',
+            score: result.scorecardSnapshot?.innings_score ?? currentInnings?.totalRuns ?? 0,
+            wickets: result.scorecardSnapshot?.innings_wickets ?? currentInnings?.totalWickets ?? 0,
+            overs: result.scorecardSnapshot?.innings_overs ?? currentInnings?.totalOvers ?? '0.0',
+          });
+        }
+        if (result.matchCompleted) {
+          setMatchCompleted(true);
+          setInningsCompleted(true);
+          setCompletionInfo({
+            teamName: battingTeam?.teamName || 'Batting Team',
+            score: result.scorecardSnapshot?.innings_score ?? currentInnings?.totalRuns ?? 0,
+            wickets: result.scorecardSnapshot?.innings_wickets ?? currentInnings?.totalWickets ?? 0,
+            overs: result.scorecardSnapshot?.innings_overs ?? currentInnings?.totalOvers ?? '0.0',
+            resultSummary: matchData?.resultSummary || undefined,
+          });
         }
       }
       setExtrasMode('normal');
@@ -685,6 +761,9 @@ export function ScoringPage() {
   const strikerStats = getBatStats(striker);
   const nonStrikerStats = getBatStats(nonStriker);
   const bowlerStats = currentBowler ? getBowlStats(currentBowler) : null;
+
+  // All scoring controls disabled when innings or match is completed
+  const scoringDisabled = inningsCompleted || matchCompleted;
 
   return (
     <motion.div
@@ -1056,7 +1135,7 @@ export function ScoringPage() {
           <motion.button
             key={runs}
             onClick={() => recordRuns(runs)}
-            disabled={deliveryMutation.isPending || pendingBowlerChange}
+            disabled={deliveryMutation.isPending || pendingBowlerChange || scoringDisabled}
             aria-label={`Score ${runs} run${runs !== 1 ? 's' : ''}`}
             whileTap={reduceMotion ? undefined : { scale: 0.92 }}
             transition={{ type: 'spring', stiffness: 400, damping: 15 }}
@@ -1080,7 +1159,7 @@ export function ScoringPage() {
       >
         <motion.button
           onClick={() => recordRuns(4)}
-          disabled={deliveryMutation.isPending || pendingBowlerChange}
+          disabled={deliveryMutation.isPending || pendingBowlerChange || scoringDisabled}
           aria-label="Score 4 runs"
           whileTap={reduceMotion ? undefined : { scale: 0.92 }}
           transition={{ type: 'spring', stiffness: 400, damping: 15 }}
@@ -1094,7 +1173,7 @@ export function ScoringPage() {
         </motion.button>
         <motion.button
           onClick={() => recordRuns(6)}
-          disabled={deliveryMutation.isPending || pendingBowlerChange}
+          disabled={deliveryMutation.isPending || pendingBowlerChange || scoringDisabled}
           aria-label="Score 6 runs"
           whileTap={reduceMotion ? undefined : { scale: 0.92 }}
           transition={{ type: 'spring', stiffness: 400, damping: 15 }}
@@ -1112,6 +1191,7 @@ export function ScoringPage() {
       <motion.div variants={reduceMotion ? undefined : itemVariants}>
         <motion.button
           onClick={() => setShowWicketModal(true)}
+          disabled={scoringDisabled}
           aria-label="Record wicket"
           whileTap={reduceMotion ? undefined : { scale: 0.95 }}
           animate={
@@ -1122,7 +1202,7 @@ export function ScoringPage() {
           transition={{ type: 'spring', stiffness: 400, damping: 15 }}
           className="w-full min-h-[56px] rounded-2xl flex items-center justify-center gap-2
             bg-cricket-red/10 text-cricket-red border-2 border-cricket-red/25
-            text-lg font-extrabold transition-colors duration-150
+            text-lg font-extrabold transition-colors duration-150 disabled:opacity-40
             hover:bg-cricket-red/15 wicket-glow"
           style={{ willChange: 'transform' }}
         >
@@ -1130,6 +1210,159 @@ export function ScoringPage() {
           WICKET
         </motion.button>
       </motion.div>
+
+      {/* ── Win Prediction widget (2nd innings chase) ─────────────────── */}
+      <AnimatePresence>
+        {prediction && !matchCompleted && (
+          <motion.div
+            initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+            animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
+            exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="card p-3"
+          >
+            <div className="flex items-center gap-2 mb-2">
+              <BarChart3 size={12} className="text-cricket-blue" />
+              <span className="text-[10px] font-bold text-theme-tertiary uppercase tracking-widest">Win Prediction</span>
+            </div>
+            <div className="flex items-center gap-3">
+              {/* Probability bar */}
+              <div className="flex-1">
+                <div className="flex justify-between text-[10px] font-semibold mb-1">
+                  <span className="text-theme-secondary">{matchData?.teams?.[0]?.teamName || 'Team A'}</span>
+                  <span className="text-theme-secondary">{matchData?.teams?.[1]?.teamName || 'Team B'}</span>
+                </div>
+                <div className="h-2 rounded-full bg-[var(--bg-input)] overflow-hidden flex">
+                  <motion.div
+                    className="h-full bg-cricket-blue rounded-l-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${prediction.winProbA}%` }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+                  />
+                  <motion.div
+                    className="h-full bg-cricket-green rounded-r-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${prediction.winProbB}%` }}
+                    transition={{ type: 'spring', stiffness: 200, damping: 25 }}
+                  />
+                </div>
+                <div className="flex justify-between text-[10px] font-bold mt-1 tabular-nums">
+                  <span className="text-cricket-blue">{prediction.winProbA}%</span>
+                  <span className="text-cricket-green">{prediction.winProbB}%</span>
+                </div>
+              </div>
+              {/* Projected score */}
+              <div className="text-center pl-3 border-l border-[var(--border-subtle)]">
+                <div className="flex items-center gap-1 mb-0.5">
+                  <TrendingUp size={10} className="text-theme-muted" />
+                  <span className="text-[9px] font-bold text-theme-muted uppercase">Projected</span>
+                </div>
+                <span className="text-sm font-extrabold text-theme-primary tabular-nums">
+                  {prediction.projectedScoreLow}-{prediction.projectedScoreHigh}
+                </span>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Innings Completed Overlay ──────────────────────────────── */}
+      <AnimatePresence>
+        {inningsCompleted && !matchCompleted && completionInfo && (
+          <motion.div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <motion.div
+              className="glass w-full max-w-md p-6 text-center"
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            >
+              <div className="w-14 h-14 rounded-full bg-cricket-gold/15 border-2 border-cricket-gold/30 flex items-center justify-center mx-auto mb-4">
+                <Trophy size={24} className="text-cricket-gold" />
+              </div>
+              <h2 className="text-2xl font-extrabold text-theme-primary mb-2">Innings Over</h2>
+              <p className="text-lg text-theme-secondary font-semibold">
+                {completionInfo.teamName} scored{' '}
+                <span className="text-cricket-gold tabular-nums">
+                  {completionInfo.score}/{completionInfo.wickets}
+                </span>
+              </p>
+              <p className="text-sm text-theme-tertiary mt-1 tabular-nums">
+                in {completionInfo.overs} overs
+              </p>
+              <motion.button
+                onClick={() => {
+                  setInningsCompleted(false);
+                  setCompletionInfo(null);
+                  queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+                }}
+                whileTap={reduceMotion ? undefined : { scale: 0.95 }}
+                className="mt-6 w-full py-3 rounded-2xl bg-cricket-green/15 text-cricket-green
+                  border-2 border-cricket-green/30 font-bold text-sm
+                  hover:bg-cricket-green/20 transition-colors"
+              >
+                Start Next Innings
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Match Completed Overlay ────────────────────────────────── */}
+      <AnimatePresence>
+        {matchCompleted && completionInfo && (
+          <motion.div
+            className="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <motion.div
+              className="glass w-full max-w-md p-6 text-center"
+              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.85, y: 20 }}
+              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1, y: 0 }}
+              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.85, y: 20 }}
+              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            >
+              <motion.div
+                className="w-16 h-16 rounded-full bg-cricket-gold/20 border-2 border-cricket-gold/40 flex items-center justify-center mx-auto mb-4"
+                animate={reduceMotion ? undefined : { rotate: [0, -5, 5, -5, 0] }}
+                transition={{ duration: 0.6, delay: 0.3 }}
+              >
+                <Trophy size={28} className="text-cricket-gold" />
+              </motion.div>
+              <h2 className="text-2xl font-extrabold text-theme-primary mb-2">Match Over</h2>
+              {completionInfo.resultSummary ? (
+                <p className="text-lg text-cricket-gold font-semibold">{completionInfo.resultSummary}</p>
+              ) : (
+                <p className="text-lg text-theme-secondary font-semibold">
+                  {completionInfo.teamName}{' '}
+                  <span className="text-cricket-gold tabular-nums">
+                    {completionInfo.score}/{completionInfo.wickets}
+                  </span>
+                  <span className="text-theme-tertiary text-sm ml-1">({completionInfo.overs} ov)</span>
+                </p>
+              )}
+              <motion.button
+                onClick={() => navigate(`/matches/${matchId}/scorecard`)}
+                whileTap={reduceMotion ? undefined : { scale: 0.95 }}
+                className="mt-6 w-full py-3 rounded-2xl bg-cricket-gold/15 text-cricket-gold
+                  border-2 border-cricket-gold/30 font-bold text-sm
+                  hover:bg-cricket-gold/20 transition-colors"
+              >
+                View Scorecard
+              </motion.button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Sticky Undo Button (bottom-right) ───────────────────────── */}
       <motion.button
@@ -1159,6 +1392,25 @@ export function ScoringPage() {
         onDismiss={() => setToastVisible(false)}
         reduceMotion={reduceMotion}
       />
+
+      {/* ── Milestone Toast ────────────────────────────────────────── */}
+      <AnimatePresence>
+        {milestoneToast && (
+          <motion.div
+            className="fixed top-6 left-1/2 z-50 max-w-md w-[calc(100%-2rem)]"
+            style={{ x: '-50%' }}
+            initial={reduceMotion ? { opacity: 0 } : { y: -60, opacity: 0, scale: 0.9 }}
+            animate={reduceMotion ? { opacity: 1 } : { y: 0, opacity: 1, scale: 1 }}
+            exit={reduceMotion ? { opacity: 0 } : { y: -60, opacity: 0, scale: 0.9 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 22 }}
+          >
+            <div className="bg-cricket-gold/15 border border-cricket-gold/40 backdrop-blur-md px-5 py-4 rounded-xl shadow-xl flex items-center gap-3">
+              <Trophy size={22} className="text-cricket-gold shrink-0" />
+              <span className="text-sm font-semibold text-cricket-gold">{milestoneToast.text}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Wicket modal ────────────────────────────────────────────── */}
       <AnimatePresence>

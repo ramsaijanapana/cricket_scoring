@@ -1,13 +1,134 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
-import { delivery, innings } from '../db/schema/index';
-import { bowlingScorecard } from '../db/schema/scorecard';
+import { delivery, innings, partnership, player, matchFormatConfig } from '../db/schema/index';
+import { match } from '../db/schema/match';
+import { battingScorecard, bowlingScorecard } from '../db/schema/scorecard';
 import { scoringEngine } from '../engine/scoring-engine';
 import { broadcast } from '../services/realtime';
 import { eq, and, desc } from 'drizzle-orm';
-import type { DeliveryInput } from '@cricket/shared';
+import type { DeliveryInput, MilestoneEvent } from '@cricket/shared';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { validateBody, recordDeliverySchema } from '../middleware/validation';
+import { cacheSet, cacheInvalidate } from '../services/cache';
+
+// ─── Milestone Detection ────────────────────────────────────────────────────
+
+const BATSMAN_THRESHOLDS = [
+  { runs: 200, type: 'double_hundred' as const, label: 'Double Century' },
+  { runs: 150, type: 'one_fifty' as const, label: '150 Runs' },
+  { runs: 100, type: 'hundred' as const, label: 'Century' },
+  { runs: 50, type: 'fifty' as const, label: 'Half Century' },
+];
+
+const TEAM_THRESHOLDS = [
+  { runs: 300, type: 'team_three_hundred' as const, label: '300 Runs' },
+  { runs: 200, type: 'team_two_hundred' as const, label: '200 Runs' },
+  { runs: 100, type: 'team_hundred' as const, label: '100 Runs' },
+];
+
+async function getPlayerName(playerId: string): Promise<string> {
+  const p = await db.query.player.findFirst({ where: eq(player.id, playerId) });
+  return p ? `${p.firstName} ${p.lastName}`.trim() : 'Unknown';
+}
+
+/**
+ * Detect milestones after a delivery is recorded and broadcast them.
+ * Checks batsman runs, bowler wickets (5-fer & hat-trick), and team score.
+ */
+async function detectAndBroadcastMilestones(
+  matchId: string,
+  deliveryRecord: typeof delivery.$inferSelect,
+  postInningsScore: number,
+  preInningsScore: number,
+): Promise<void> {
+  const milestones: MilestoneEvent[] = [];
+  const del = deliveryRecord;
+
+  // 1. Batsman milestone — check if striker crossed a threshold
+  if (del.runsBatsman > 0) {
+    const batCard = await db.query.battingScorecard.findFirst({
+      where: and(
+        eq(battingScorecard.inningsId, del.inningsId),
+        eq(battingScorecard.playerId, del.strikerId),
+      ),
+    });
+    if (batCard) {
+      const postRuns = batCard.runsScored;
+      const preRuns = postRuns - del.runsBatsman;
+      for (const threshold of BATSMAN_THRESHOLDS) {
+        if (preRuns < threshold.runs && postRuns >= threshold.runs) {
+          const name = await getPlayerName(del.strikerId);
+          milestones.push({
+            type: threshold.type,
+            player: { id: del.strikerId, name },
+            text: `${name} reaches ${threshold.label}! (${postRuns} runs off ${batCard.ballsFaced} balls)`,
+          });
+          break; // only broadcast the highest threshold crossed
+        }
+      }
+    }
+  }
+
+  // 2. Bowler milestones — 5-wicket haul & hat-trick
+  if (del.isWicket) {
+    const bowlCard = await db.query.bowlingScorecard.findFirst({
+      where: and(
+        eq(bowlingScorecard.inningsId, del.inningsId),
+        eq(bowlingScorecard.playerId, del.bowlerId),
+      ),
+    });
+
+    // 5-wicket haul: fire only when they first reach exactly 5
+    if (bowlCard && bowlCard.wicketsTaken === 5) {
+      const name = await getPlayerName(del.bowlerId);
+      milestones.push({
+        type: 'five_wickets',
+        player: { id: del.bowlerId, name },
+        text: `${name} takes a 5-wicket haul! (5/${bowlCard.runsConceded})`,
+      });
+    }
+
+    // Hat-trick: last 3 deliveries by this bowler in this innings are all wickets
+    const recentBowlerDeliveries = await db.query.delivery.findMany({
+      where: and(
+        eq(delivery.inningsId, del.inningsId),
+        eq(delivery.bowlerId, del.bowlerId),
+        eq(delivery.isOverridden, false),
+      ),
+      orderBy: [desc(delivery.undoStackPos)],
+      limit: 3,
+    });
+
+    if (
+      recentBowlerDeliveries.length === 3 &&
+      recentBowlerDeliveries.every((d) => d.isWicket)
+    ) {
+      const name = await getPlayerName(del.bowlerId);
+      milestones.push({
+        type: 'hat_trick',
+        player: { id: del.bowlerId, name },
+        text: `HAT-TRICK! ${name} takes 3 wickets in 3 consecutive deliveries!`,
+      });
+    }
+  }
+
+  // 3. Team milestone — check if innings score crossed a threshold
+  for (const threshold of TEAM_THRESHOLDS) {
+    if (preInningsScore < threshold.runs && postInningsScore >= threshold.runs) {
+      milestones.push({
+        type: threshold.type,
+        player: { id: '', name: 'Team' },
+        text: `Team reaches ${threshold.label}!`,
+      });
+      break; // only broadcast the highest threshold crossed
+    }
+  }
+
+  // Broadcast each detected milestone
+  for (const milestone of milestones) {
+    broadcast.milestone(matchId, milestone);
+  }
+}
 
 /**
  * Delivery routes — context.md section 6.1
@@ -107,6 +228,9 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       }
     }
 
+    // Capture pre-delivery innings score for milestone threshold detection
+    const preDeliveryInningsScore = liveInnings.totalRuns ?? 0;
+
     let result;
     try {
       result = await scoringEngine.recordDelivery(input, req.body.client_id);
@@ -120,8 +244,69 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       throw err;
     }
 
+    // ── Win Prediction broadcast (2nd innings chase) ──────────────────────
+    if (input.inningsNum >= 2 && liveInnings.targetScore) {
+      const target = liveInnings.targetScore;
+      const currentScore = result.scorecardSnapshot.innings_score ?? 0;
+      const oversStr = String(result.scorecardSnapshot.innings_overs ?? '0.0');
+      const oversParts = oversStr.split('.');
+      const completedOvers = parseInt(oversParts[0], 10) || 0;
+      const partialBalls = parseInt(oversParts[1] || '0', 10);
+      const totalBallsBowled = completedOvers * 6 + partialBalls;
+
+      // Get overs per innings from match format config
+      const matchRecord = await db.query.match.findFirst({ where: eq(match.id, req.params.id) });
+      const formatConfig = matchRecord?.formatConfigId
+        ? await db.query.matchFormatConfig.findFirst({ where: eq(matchFormatConfig.id, matchRecord.formatConfigId) })
+        : null;
+      const totalOvers = formatConfig?.oversPerInnings ?? 20;
+      const totalBallsInInnings = totalOvers * 6;
+      const remainingBalls = Math.max(totalBallsInInnings - totalBallsBowled, 1);
+
+      const currentRunRate = totalBallsBowled > 0 ? (currentScore / totalBallsBowled) * 6 : 0;
+      const requiredRunRate = ((target - currentScore) / remainingBalls) * 6;
+
+      // Simple win probability heuristic (placeholder until ML model)
+      let winProbChasing: number;
+      if (currentScore >= target) {
+        winProbChasing = 100;
+      } else if (remainingBalls <= 0 || (liveInnings.totalWickets ?? 0) >= 10) {
+        winProbChasing = 0;
+      } else if (requiredRunRate <= currentRunRate * 0.7) {
+        winProbChasing = 80 + Math.min(15, (currentRunRate - requiredRunRate) * 3);
+      } else if (requiredRunRate <= currentRunRate) {
+        winProbChasing = 60 + (currentRunRate - requiredRunRate) * 10;
+      } else if (requiredRunRate <= currentRunRate * 1.5) {
+        winProbChasing = 40 + (1.5 - requiredRunRate / currentRunRate) * 40;
+      } else if (requiredRunRate <= currentRunRate * 2) {
+        winProbChasing = 20 + (2 - requiredRunRate / currentRunRate) * 40;
+      } else {
+        winProbChasing = Math.max(2, 20 - (requiredRunRate - currentRunRate * 2) * 5);
+      }
+      winProbChasing = Math.max(0, Math.min(100, Math.round(winProbChasing)));
+
+      // Projected score: extrapolate from current run rate
+      const projectedLow = Math.round(currentScore + (remainingBalls / 6) * currentRunRate * 0.85);
+      const projectedHigh = Math.round(currentScore + (remainingBalls / 6) * currentRunRate * 1.15);
+
+      broadcast.prediction(req.params.id, {
+        winProbA: 100 - winProbChasing,
+        winProbB: winProbChasing,
+        projectedScoreLow: projectedLow,
+        projectedScoreHigh: projectedHigh,
+      });
+    }
+
     // Broadcast via WebSocket — context.md section 6.2
     if (result.delivery.isWicket) {
+      const endedPartnership = await db.query.partnership.findFirst({
+        where: and(
+          eq(partnership.inningsId, result.delivery.inningsId),
+          eq(partnership.isActive, false),
+        ),
+        orderBy: [desc(partnership.createdAt)],
+      });
+
       broadcast.wicket(req.params.id, {
         delivery: result.delivery as any,
         wicketDetail: {
@@ -132,7 +317,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
           text: `${result.delivery.wicketType}`,
         },
         commentary: result.commentary,
-        partnershipEnded: null as any, // TODO: compute partnership
+        partnershipEnded: endedPartnership as any,
       });
     } else {
       broadcast.delivery(req.params.id, {
@@ -170,6 +355,21 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
+    // Detect and broadcast milestones (batsman 50/100/150/200, bowler 5w/hat-trick, team 100/200/300)
+    detectAndBroadcastMilestones(
+      req.params.id,
+      result.delivery,
+      result.scorecardSnapshot.innings_score,
+      preDeliveryInningsScore,
+    ).catch((err) => {
+      // Non-blocking — milestone detection failure should never break scoring
+      console.error('Milestone detection error:', err);
+    });
+
+    // Update Redis caches — non-blocking, failures are silent
+    cacheSet(`match:${req.params.id}:live_score`, result.scorecardSnapshot, 60);
+    cacheInvalidate(`match:${req.params.id}:scorecard`);
+
     return reply.status(201).send({
       delivery: result.delivery,
       commentary: result.commentary,
@@ -205,6 +405,10 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
     if (!result.success) {
       return reply.status(404).send({ error: 'No delivery to undo' });
     }
+
+    // Invalidate caches — undo changes the scorecard
+    cacheInvalidate(`match:${req.params.id}:live_score`);
+    cacheInvalidate(`match:${req.params.id}:scorecard`);
 
     // Broadcast status update
     broadcast.status(req.params.id, {
@@ -272,6 +476,10 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
         totalRuns: 0, totalWickets: 0, totalOvers: '0.0', totalExtras: 0,
       }).where(eq(innings.id, inningsId));
     }
+
+    // Invalidate caches — batch undo changes the scorecard
+    cacheInvalidate(`match:${req.params.id}:live_score`);
+    cacheInvalidate(`match:${req.params.id}:scorecard`);
 
     broadcast.status(req.params.id, {
       status: 'batch_undo',

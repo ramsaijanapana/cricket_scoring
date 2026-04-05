@@ -8,6 +8,7 @@ import { broadcast } from '../services/realtime';
 import { requireAuth, requireRole, getUserId } from '../middleware/auth';
 import { validateBody, createMatchSchema } from '../middleware/validation';
 import { parsePagination, paginatedResponse } from '../middleware/pagination';
+import { cacheGet, cacheSet, invalidateMatchCache } from '../services/cache';
 
 // Valid match status transitions
 const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
@@ -92,6 +93,11 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
 
   // Get match by ID with teams (enriched) and innings
   app.get<{ Params: { id: string } }>('/:id', async (req, reply) => {
+    // Check Redis cache first
+    const cacheKey = `match:${req.params.id}:detail`;
+    const cached = await cacheGet<unknown>(cacheKey);
+    if (cached) return cached;
+
     const result = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -167,7 +173,12 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       })
     );
 
-    return { ...result, teams: enrichedTeams, innings: enrichedInnings };
+    const matchDetail = { ...result, teams: enrichedTeams, innings: enrichedInnings };
+
+    // Cache match detail with 5-minute TTL
+    cacheSet(cacheKey, matchDetail, 300);
+
+    return matchDetail;
   });
 
   // Create match
@@ -406,6 +417,10 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       updatedAt: new Date(),
     }).where(eq(match.id, req.params.id)).returning();
     if (!updated) return reply.status(404).send({ error: 'Match not found' });
+
+    // Invalidate all match caches on state change
+    invalidateMatchCache(req.params.id);
+
     return updated;
   });
 

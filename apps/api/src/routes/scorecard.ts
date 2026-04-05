@@ -5,10 +5,16 @@ import { player } from '../db/schema/player';
 import { team } from '../db/schema/team';
 import { battingScorecard, bowlingScorecard, fieldingScorecard } from '../db/schema/scorecard';
 import { eq, and, asc, inArray, sql } from 'drizzle-orm';
+import { cacheGet, cacheSet } from '../services/cache';
 
 export const scorecardRoutes: FastifyPluginAsync = async (app) => {
   // Get full scorecard for a match — enriched with player + team names
   app.get<{ Params: { id: string } }>('/:id/scorecard', async (req, reply) => {
+    // Check Redis cache first
+    const cacheKey = `match:${req.params.id}:scorecard`;
+    const cached = await cacheGet<unknown[]>(cacheKey);
+    if (cached) return cached;
+
     const matchInnings = await db.query.innings.findMany({
       where: eq(innings.matchId, req.params.id),
       orderBy: (i, { asc }) => [asc(i.inningsNumber)],
@@ -181,6 +187,9 @@ export const scorecardRoutes: FastifyPluginAsync = async (app) => {
         fallOfWickets,
       };
     });
+
+    // Cache the scorecard (no TTL — invalidated on each delivery)
+    cacheSet(cacheKey, scorecard);
 
     return scorecard;
   });

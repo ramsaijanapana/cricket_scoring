@@ -55,7 +55,7 @@ export interface ScoringResult {
  * Per context.md section 13:
  * - Delivery records are IMMUTABLE. Corrections create override records.
  * - undo_stack_pos and legal_ball_num are critical for scoring integrity.
- * - Uses Redis for live score cache reads on the hot path (TODO: integrate Redis).
+ * - Uses Redis for live score cache reads on the hot path (see services/cache.ts).
  *
  * All mutating methods use SERIALIZABLE transactions to prevent concurrent corruption.
  */

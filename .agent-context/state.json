@@ -1,14 +1,14 @@
 {
   "project": "cricket_scoring",
-  "updatedAt": "2026-04-05T23:09:10.230Z",
+  "updatedAt": "2026-04-05T23:23:56.729Z",
   "branch": "main",
-  "head": "67d429d",
+  "head": "9fe7ecf",
   "currentFocus": "npm command troubleshooting",
   "latestSummary": [
-    "Fixed run-out dismissal selection, innings completion guard, over broadcast stats, dead ball validation"
+    "Added milestone detection, win predictions, Redis caching, completion UI, partnership broadcast"
   ],
   "nextSteps": [
-    "DLS calculation logic, milestone detection, prediction broadcast"
+    "Enhancement backlog — see ENHANCEMENTS.md"
   ],
   "risks": [
     "Interactive PowerShell may still fail on machines where npm.ps1 is blocked by execution policy even though npm works in non-interactive runners."
@@ -23,17 +23,41 @@
   "workingTree": {
     "changedFiles": [
       "claude/worktrees/agent-a6aaeee9",
-      "apps/api/src/middleware/validation.ts",
+      "apps/api/src/engine/scoring-engine.ts",
       "apps/api/src/routes/deliveries.ts",
-      "apps/web/src/pages/ScoringPage.tsx"
+      "apps/api/src/routes/matches.ts",
+      "apps/api/src/routes/scorecard.ts",
+      "apps/web/src/pages/ScoringPage.tsx",
+      "packages/shared/src/types/events.ts",
+      "apps/api/src/services/cache.ts"
     ],
-    "stagedFiles": [
-      "apps/api/src/middleware/validation.ts",
-      "apps/api/src/routes/deliveries.ts",
-      "apps/web/src/pages/ScoringPage.tsx"
-    ]
+    "stagedFiles": []
   },
   "recentCheckpoints": [
+    {
+      "updatedAt": "2026-04-05T23:23:56.729Z",
+      "actor": "ramsa",
+      "focus": "npm command troubleshooting",
+      "summary": [
+        "Added milestone detection, win predictions, Redis caching, completion UI, partnership broadcast"
+      ],
+      "nextSteps": [
+        "Enhancement backlog — see ENHANCEMENTS.md"
+      ],
+      "risks": [],
+      "decisions": [],
+      "verification": [],
+      "changedFiles": [
+        "claude/worktrees/agent-a6aaeee9",
+        "apps/api/src/engine/scoring-engine.ts",
+        "apps/api/src/routes/deliveries.ts",
+        "apps/api/src/routes/matches.ts",
+        "apps/api/src/routes/scorecard.ts",
+        "apps/web/src/pages/ScoringPage.tsx",
+        "packages/shared/src/types/events.ts",
+        "apps/api/src/services/cache.ts"
+      ]
+    },
     {
       "updatedAt": "2026-04-05T23:09:10.230Z",
       "actor": "ramsa",

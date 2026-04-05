@@ -84,7 +84,7 @@ export interface OverEvent {
 }
 
 export interface MilestoneEvent {
-  type: 'fifty' | 'hundred' | 'five_wickets' | 'hat_trick' | 'fastest_fifty' | 'double_hundred';
+  type: 'fifty' | 'hundred' | 'one_fifty' | 'double_hundred' | 'five_wickets' | 'hat_trick' | 'fastest_fifty' | 'team_hundred' | 'team_two_hundred' | 'team_three_hundred';
   player: {
     id: string;
     name: string;
