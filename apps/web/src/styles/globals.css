@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --color-green: #1A7C3E;
+    --color-gold: #C8991A;
+    --color-red: #B22222;
+    --color-blue: #1A4D7C;
+  }
+
+  html {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Ensure minimum 44x44px tap targets per context.md */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Smooth scrolling */
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Custom scrollbar for dark mode */
+  ::-webkit-scrollbar {
+    width: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: #1e293b;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #475569;
+    border-radius: 3px;
+  }
+}
+
+@layer components {
+  .score-display {
+    @apply text-5xl font-extrabold tracking-tight;
+  }
+
+  .card {
+    @apply bg-surface-800 border border-surface-700 rounded-xl p-4;
+  }
+
+  .btn-primary {
+    @apply bg-cricket-green text-white font-semibold px-4 py-3 rounded-lg
+           hover:brightness-110 active:brightness-90 transition-all;
+  }
+
+  .btn-danger {
+    @apply bg-cricket-red text-white font-semibold px-4 py-3 rounded-lg
+           hover:brightness-110 active:brightness-90 transition-all;
+  }
+
+  .btn-outline {
+    @apply border border-surface-700 text-surface-200 font-semibold px-4 py-3 rounded-lg
+           hover:bg-surface-800 active:bg-surface-700 transition-all;
+  }
+
+  /* Ball outcome bubbles */
+  .ball-dot { @apply bg-surface-700 text-surface-400; }
+  .ball-run { @apply bg-surface-700 text-surface-50; }
+  .ball-four { @apply bg-cricket-green/20 text-cricket-green border border-cricket-green/40; }
+  .ball-six { @apply bg-purple-600/20 text-purple-400 border border-purple-500/40; }
+  .ball-wicket { @apply bg-cricket-red/20 text-cricket-red border border-cricket-red/40; }
+  .ball-wide { @apply bg-cricket-gold/20 text-cricket-gold; }
+  .ball-noball { @apply bg-orange-500/20 text-orange-400; }
+}

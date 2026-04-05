@@ -1,0 +1,32 @@
+{
+  "name": "cricket-scoring",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "turbo run dev --filter=@cricket/api",
+    "dev:web": "turbo run dev --filter=@cricket/web",
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "db:migrate": "turbo run db:migrate --filter=@cricket/api",
+    "db:seed": "turbo run db:seed --filter=@cricket/api",
+    "prepare": "node scripts/install-git-hooks.mjs",
+    "context:update": "node scripts/context-handoff.mjs update",
+    "context:compact": "node scripts/context-handoff.mjs compact",
+    "context:status": "node scripts/context-handoff.mjs status",
+    "context:watch": "node scripts/context-handoff.mjs watch",
+    "context:check": "node scripts/context-handoff.mjs check --staged"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "packageManager": "npm@10.8.0"
+}

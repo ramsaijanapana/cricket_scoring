@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.js
+# Build outputs
+dist/
+build/
+.next/
+.expo/
+*.tsbuildinfo
+# Environment
+.env
+.env.local
+.env.*.local
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+# OS
+.DS_Store
+Thumbs.db
+# Turbo
+.turbo/
+# Testing
+coverage/
+# Expo
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+# Database
+*.sqlite
+*.sqlite3
+.agent-context/history.jsonl
+.agent-context/archive

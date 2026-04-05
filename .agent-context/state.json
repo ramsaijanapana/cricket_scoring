@@ -1,0 +1,70 @@
+{
+  "project": "cricket_scoring",
+  "updatedAt": "2026-04-05T13:33:06.205Z",
+  "branch": "",
+  "head": "",
+  "currentFocus": "Agent context workflow setup",
+  "latestSummary": [
+    "Installed the reusable agent handoff workflow in this repository.",
+    "Corrected the README handoff section so it no longer points to a missing bootstrap script."
+  ],
+  "nextSteps": [
+    "Use context:update after each meaningful change and refresh the handoff again before stopping work."
+  ],
+  "risks": [
+    "PowerShell blocks npm.ps1 on this machine, so use npm.cmd or node scripts/context-handoff.mjs if npm run fails."
+  ],
+  "decisions": [
+    "AGENTS.md, AGENT_HANDOFF.md, and .agent-context/state.json are the required handoff source of truth for future agents."
+  ],
+  "verification": [
+    "Ran node scripts/context-handoff.mjs status successfully.",
+    "Confirmed the pre-commit hook runs scripts/context-handoff.mjs check --staged."
+  ],
+  "workingTree": {
+    "changedFiles": [],
+    "stagedFiles": []
+  },
+  "recentCheckpoints": [
+    {
+      "updatedAt": "2026-04-05T13:33:06.205Z",
+      "actor": "ramsa",
+      "focus": "Agent context workflow setup",
+      "summary": [
+        "Installed the reusable agent handoff workflow in this repository.",
+        "Corrected the README handoff section so it no longer points to a missing bootstrap script."
+      ],
+      "nextSteps": [
+        "Use context:update after each meaningful change and refresh the handoff again before stopping work."
+      ],
+      "risks": [
+        "PowerShell blocks npm.ps1 on this machine, so use npm.cmd or node scripts/context-handoff.mjs if npm run fails."
+      ],
+      "decisions": [
+        "AGENTS.md, AGENT_HANDOFF.md, and .agent-context/state.json are the required handoff source of truth for future agents."
+      ],
+      "verification": [
+        "Ran node scripts/context-handoff.mjs status successfully.",
+        "Confirmed the pre-commit hook runs scripts/context-handoff.mjs check --staged."
+      ],
+      "changedFiles": []
+    },
+    {
+      "updatedAt": "2026-04-05T13:31:57.475Z",
+      "actor": "ramsa",
+      "focus": "Agent context workflow bootstrap",
+      "summary": [
+        "Initialized the reusable agent context workflow in this repository."
+      ],
+      "nextSteps": [
+        "Use context:update after each meaningful change."
+      ],
+      "risks": [],
+      "decisions": [
+        "AGENTS.md plus AGENT_HANDOFF.md govern agent handoffs in this repo."
+      ],
+      "verification": [],
+      "changedFiles": []
+    }
+  ]
+}
