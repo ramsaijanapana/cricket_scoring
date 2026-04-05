@@ -108,6 +108,108 @@ export interface PredictionData {
   projectedScore: number | null;
 }
 
+// ─── Tournament types ──────────────────────────────────────────────────────
+
+export interface TournamentDetail {
+  id: string;
+  name: string;
+  shortName?: string;
+  season?: string;
+  format: string;
+  startDate?: string;
+  endDate?: string;
+  organizer?: string;
+  status: 'upcoming' | 'live' | 'completed';
+  fixtures?: TournamentFixture[];
+  teams?: Team[];
+  createdAt: string;
+}
+
+export interface TournamentFixture {
+  id: string;
+  matchNumber?: number;
+  homeTeamId?: string;
+  awayTeamId?: string;
+  homeTeamName: string;
+  awayTeamName: string;
+  venue?: string;
+  city?: string;
+  scheduledStart?: string;
+  status: string;
+  resultSummary?: string;
+  currentScore?: string;
+  currentOvers?: string;
+}
+
+export interface PointsTableEntry {
+  teamId: string;
+  teamName: string;
+  played: number;
+  won: number;
+  lost: number;
+  drawn: number;
+  noResult: number;
+  points: number;
+  nrr: number;
+}
+
+export interface CreateTournamentInput {
+  name: string;
+  shortName?: string;
+  season?: string;
+  format: string;
+  startDate?: string;
+  endDate?: string;
+  organizer?: string;
+  teamIds?: string[];
+  groupStageConfig?: {
+    groups?: number;
+    teamsPerGroup?: number;
+    pointsForWin?: number;
+    pointsForTie?: number;
+    pointsForNR?: number;
+  };
+}
+
+export interface AddFixtureInput {
+  homeTeamId: string;
+  awayTeamId: string;
+  formatConfigId: string;
+  matchNumber?: number;
+  venue?: string;
+  city?: string;
+  scheduledStart?: string;
+  stage?: string;
+}
+
+// ─── GDPR types ────────────────────────────────────────────────────────────
+
+export interface UserExportData {
+  exportedAt: string;
+  profile: Record<string, unknown>;
+  teamsManaged: Team[];
+  matchesScored: Array<{
+    id: string;
+    venue?: string;
+    status: string;
+    scheduledStart?: string;
+    resultSummary?: string;
+  }>;
+  chatMessages: Array<{
+    id: string;
+    roomId: string;
+    content: string;
+    createdAt: string;
+  }>;
+}
+
+export interface AccountDeletionResponse {
+  message: string;
+  deletedAt: string;
+  hardDeleteDate: string;
+  gracePeriodDays: number;
+}
+
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
 function getAuthHeaders(): Record<string, string> {
@@ -205,7 +307,21 @@ export const api = {
   // Scorecard & Commentary
   getScorecard: (matchId: string) => request<InningsScorecard[]>(`/matches/${matchId}/scorecard`),
   getCommentary: (matchId: string, page = 1) =>
-    request<Commentary[]>(`/matches/${matchId}/commentary?page=${page}`),
+    request<{ data: Commentary[]; page: number; limit: number; hasMore: boolean }>(
+      `/matches/${matchId}/commentary?page=${page}`,
+    ),
+  updateCommentary: (matchId: string, commentaryId: string, data: { text?: string; text_short?: string }) =>
+    request<Commentary>(`/matches/${matchId}/commentary/${commentaryId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+
+  // Toss
+  recordToss: (matchId: string, data: { winner_id: string; decision: 'bat' | 'field' }) =>
+    request<MatchDetail>(`/matches/${matchId}/toss`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
 
   // Innings
   createInnings: (matchId: string, data: Partial<Innings>) =>
@@ -235,4 +351,36 @@ export const api = {
     request<PredictionData>(`/matches/${matchId}/predictions`),
   getDLS: (matchId: string) =>
     request<DLSState>(`/matches/${matchId}/dls`),
+
+  // Tournaments
+  getTournaments: (status?: string) =>
+    request<{ data: TournamentDetail[] }>(`/tournaments${status ? `?status=${status}` : ''}`),
+  getTournament: (id: string) =>
+    request<TournamentDetail>(`/tournaments/${id}`),
+  createTournament: (data: CreateTournamentInput) =>
+    request<TournamentDetail>('/tournaments', { method: 'POST', body: JSON.stringify(data) }),
+  addFixture: (tournamentId: string, data: AddFixtureInput) =>
+    request<Match>(`/tournaments/${tournamentId}/fixtures`, { method: 'POST', body: JSON.stringify(data) }),
+  getPointsTable: (tournamentId: string) =>
+    request<{ pointsTable: PointsTableEntry[] }>(`/tournaments/${tournamentId}/points-table`),
+
+  // Scorer assignment
+  assignScorer: (matchId: string, userId: string) =>
+    request<{ scorers: string[] }>(`/matches/${matchId}/scorers`, {
+      method: 'POST',
+      body: JSON.stringify({ userId }),
+    }),
+  revokeScorer: (matchId: string, userId: string) =>
+    request<void>(`/matches/${matchId}/scorers/${userId}`, { method: 'DELETE' }),
+
+  // GDPR / Settings
+  exportUserData: () =>
+    request<UserExportData>('/users/me/export'),
+  deleteAccount: (confirmation: string) =>
+    request<AccountDeletionResponse>('/users/me', {
+      method: 'DELETE',
+      body: JSON.stringify({ confirmation }),
+    }),
+  reactivateAccount: () =>
+    request<Record<string, unknown>>('/users/me/reactivate', { method: 'POST' }),
 };

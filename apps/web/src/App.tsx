@@ -7,6 +7,9 @@ const HomePage = lazy(() => import('./pages/HomePage').then(m => ({ default: m.H
 const ScoringPage = lazy(() => import('./pages/ScoringPage').then(m => ({ default: m.ScoringPage })));
 const ScorecardPage = lazy(() => import('./pages/ScorecardPage').then(m => ({ default: m.ScorecardPage })));
 const CreateMatchPage = lazy(() => import('./pages/CreateMatchPage').then(m => ({ default: m.CreateMatchPage })));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
+const TournamentPage = lazy(() => import('./pages/TournamentPage').then(m => ({ default: m.TournamentPage })));
+const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 
 function LoadingSpinner() {
   return (
@@ -71,6 +74,10 @@ export function App() {
           <Route path="/matches/new" element={<AnimatedPage><CreateMatchPage /></AnimatedPage>} />
           <Route path="/matches/:id/score" element={<AnimatedPage><ScoringPage /></AnimatedPage>} />
           <Route path="/matches/:id/scorecard" element={<AnimatedPage><ScorecardPage /></AnimatedPage>} />
+          <Route path="/matches/:id/analytics" element={<AnimatedPage><AnalyticsPage /></AnimatedPage>} />
+          <Route path="/tournaments" element={<AnimatedPage><TournamentPage /></AnimatedPage>} />
+          <Route path="/tournaments/:id" element={<AnimatedPage><TournamentPage /></AnimatedPage>} />
+          <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
         </Route>
       </Routes>
     </Suspense>

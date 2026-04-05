@@ -4,12 +4,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Link } from 'react-router-dom';
 import { Undo2, X, ChevronLeft, AlertTriangle, Trophy, ArrowLeft, ArrowLeftRight, ChevronDown, TrendingUp, BarChart3 } from 'lucide-react';
-import type { PredictionEvent } from '@cricket/shared';
+import type { PredictionEvent, Commentary } from '@cricket/shared';
 import { api, ApiError } from '../lib/api';
 import { joinMatch, leaveMatch, getSocket, WS_EVENTS } from '../lib/socket';
 import { offlineStore } from '../lib/offline-store';
 import { useScoringStore, type BallDisplay } from '../stores/scoring-store';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { TossWizard } from '../components/TossWizard';
+import { SyncStatusBadge } from '../components/SyncStatusBadge';
+import { CommentaryEditor } from '../components/CommentaryEditor';
 
 type ExtrasMode = 'normal' | 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty';
 
@@ -157,6 +160,10 @@ export function ScoringPage() {
   // Win prediction (2nd innings chase)
   const [prediction, setPrediction] = useState<PredictionEvent | null>(null);
 
+  // Commentary editor state — tracks latest commentary for the most recent delivery
+  const [latestCommentary, setLatestCommentary] = useState<Commentary | null>(null);
+  const [deliveryVersion, setDeliveryVersion] = useState(0);
+
   // Manual strike swap
   const swapStrike = useCallback(() => {
     setCurrentStrikerId(prev => {
@@ -237,6 +244,11 @@ export function ScoringPage() {
     socket.on(deliveryEvent, (data: any) => {
       updateFromDelivery(data);
       queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      // Capture commentary for the CommentaryEditor
+      if (data?.commentary) {
+        setLatestCommentary(data.commentary);
+        setDeliveryVersion((v) => v + 1);
+      }
     });
 
     socket.on(wicketEvent, (data: any) => {
@@ -323,22 +335,6 @@ export function ScoringPage() {
     };
   }, [matchId, queryClient, setSyncStatus]);
 
-  // Start match mutation
-  const startMutation = useMutation({
-    mutationFn: async (battingTeamId: string) => {
-      const teams = matchData?.teams || [];
-      const bowlingTeam = teams.find((t: any) => t.teamId !== battingTeamId);
-      return api.startMatch(matchId!, {
-        battingTeamId,
-        bowlingTeamId: bowlingTeam?.teamId || '',
-        battingOrder: [],
-      });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-    },
-  });
-
   // Record delivery
   const deliveryMutation = useMutation({
     mutationFn: async (input: any) => {
@@ -352,6 +348,12 @@ export function ScoringPage() {
     onSuccess: (result: any) => {
       if (!('offline' in result)) {
         queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+
+        // Capture commentary from delivery response for the editor
+        if (result.commentary) {
+          setLatestCommentary(result.commentary);
+          setDeliveryVersion((v) => v + 1);
+        }
 
         // Update strike from server response (cricket rotation rules applied server-side)
         if (result.newStrikerId) setCurrentStrikerId(result.newStrikerId);
@@ -693,55 +695,9 @@ export function ScoringPage() {
     );
   }
 
-  // ─── Match needs to be started — show team picker ─────────────────────────
+  // ─── Match needs to be started — show Toss Wizard ─────────────────────────
   if (needsStart) {
-    const teams = matchData?.teams || [];
-    return (
-      <div className="max-w-lg mx-auto animate-fade-in">
-        <div className="card text-center py-8 mb-6">
-          <h2 className="text-xl font-bold mb-2">Start Match</h2>
-          <p className="text-theme-tertiary text-sm">
-            {matchData?.venue}{matchData?.city ? ` · ${matchData.city}` : ''}
-          </p>
-          <div className="flex items-center justify-center gap-3 mt-4">
-            <span className="font-bold text-theme-primary">{teams[0]?.teamName || 'Home'}</span>
-            <span className="text-theme-muted text-xs font-bold">VS</span>
-            <span className="font-bold text-theme-primary">{teams[1]?.teamName || 'Away'}</span>
-          </div>
-        </div>
-
-        <p className="label text-center mb-4">Who bats first?</p>
-
-        <div className="flex flex-col gap-3">
-          {teams.map((t: any) => (
-            <button
-              key={t.teamId}
-              onClick={() => startMutation.mutate(t.teamId)}
-              disabled={startMutation.isPending}
-              className="card card-hover text-center py-6 cursor-pointer"
-              aria-label={`${t.teamName || t.designation} bats first`}
-            >
-              <p className="text-lg font-bold text-theme-primary">
-                {t.teamName || (t.designation === 'home' ? 'Home' : 'Away')}
-              </p>
-              <p className="text-xs text-theme-tertiary mt-1 uppercase tracking-widest">{t.designation}</p>
-            </button>
-          ))}
-        </div>
-
-        {startMutation.isPending && (
-          <p className="text-center text-theme-tertiary text-sm mt-4 animate-pulse-soft">Starting match...</p>
-        )}
-
-        {startMutation.isError && (
-          <div className="mt-4 p-3 rounded-xl bg-cricket-red/10 border border-cricket-red/20 animate-scale-in">
-            <p className="text-cricket-red text-sm text-center font-medium">
-              {(startMutation.error as Error).message}
-            </p>
-          </div>
-        )}
-      </div>
-    );
+    return <TossWizard matchId={matchId!} matchData={matchData!} />;
   }
 
   // ─── Score display data ───────────────────────────────────────────────────
@@ -772,12 +728,13 @@ export function ScoringPage() {
       initial={reduceMotion ? undefined : 'hidden'}
       animate={reduceMotion ? undefined : 'visible'}
     >
-      {/* ── Back button ──────────────────────────────────────────────── */}
-      <motion.div variants={reduceMotion ? undefined : itemVariants}>
+      {/* ── Back button + Sync Status ──────────────────────────────── */}
+      <motion.div variants={reduceMotion ? undefined : itemVariants} className="flex items-center justify-between">
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-theme-tertiary hover:text-theme-primary transition-colors min-h-0 min-w-0 py-1">
           <ArrowLeft size={16} />
           <span>Back to Matches</span>
         </Link>
+        <SyncStatusBadge />
       </motion.div>
 
       {/* ── Sync status ─────────────────────────────────────────────── */}
@@ -1042,6 +999,17 @@ export function ScoringPage() {
           )}
         </div>
       </motion.div>
+
+      {/* ── Commentary Editor (last delivery) ─────────────────────── */}
+      {latestCommentary && (
+        <motion.div variants={reduceMotion ? undefined : itemVariants}>
+          <CommentaryEditor
+            matchId={matchId!}
+            commentary={latestCommentary}
+            deliveryVersion={deliveryVersion}
+          />
+        </motion.div>
+      )}
 
       {/* ── Partnership ─────────────────────────────────────────────── */}
       {partnershipRuns !== null && partnershipBalls !== null && (

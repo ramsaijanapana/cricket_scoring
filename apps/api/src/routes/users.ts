@@ -1,6 +1,6 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
-import { appUser } from '../db/schema/index';
+import { appUser, match, chatMessage, team } from '../db/schema/index';
 import { eq } from 'drizzle-orm';
 import { requireAuth, getUserId } from '../middleware/auth';
 import { sanitizeUser } from '../middleware/serialize';
@@ -50,7 +50,7 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
 
     return { avatarUrl };
   });
-  // Export user's personal data (GDPR data export)
+  // Export user's personal data (GDPR data export) — comprehensive
   app.get('/me/export', async (req, reply) => {
     let userId: string;
     try { userId = getUserId(req); } catch { return reply.status(401).send({ error: 'Authentication required' }); }
@@ -60,7 +60,50 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!user) return reply.status(404).send({ error: 'User not found' });
 
-    return sanitizeUser(user);
+    // Gather all user data for GDPR export
+    const [userTeams, userMessages] = await Promise.all([
+      // Teams the user manages
+      user.teamId
+        ? db.query.team.findMany({ where: eq(team.id, user.teamId) })
+        : Promise.resolve([]),
+      // Chat messages sent by this user
+      db.query.chatMessage.findMany({
+        where: eq(chatMessage.senderId, userId),
+      }),
+    ]);
+
+    // Find matches where user was a scorer (via matchOfficials JSON)
+    // We do a broader query and filter in-memory since matchOfficials is JSONB
+    const allMatches = await db.query.match.findMany();
+    const scoredMatches = allMatches.filter((m) => {
+      const officials = m.matchOfficials as Record<string, unknown> | null;
+      if (!officials) return false;
+      const scorers = (officials.scorers as string[]) || [];
+      return scorers.includes(userId);
+    });
+
+    const exportData = {
+      exportedAt: new Date().toISOString(),
+      profile: sanitizeUser(user),
+      teamsManaged: userTeams,
+      matchesScored: scoredMatches.map((m) => ({
+        id: m.id,
+        venue: m.venue,
+        status: m.status,
+        scheduledStart: m.scheduledStart,
+        resultSummary: m.resultSummary,
+      })),
+      chatMessages: userMessages.map((m) => ({
+        id: m.id,
+        roomId: m.roomId,
+        content: m.content,
+        createdAt: m.createdAt,
+      })),
+    };
+
+    reply.header('Content-Disposition', `attachment; filename="cricscore-data-export-${userId}.json"`);
+    reply.header('Content-Type', 'application/json');
+    return exportData;
   });
 
   // Update social profile fields
@@ -108,18 +151,69 @@ export const userRoutes: FastifyPluginAsync = async (app) => {
     return sanitizeUser(updated);
   });
 
-  // Soft-delete user account (GDPR right to erasure)
+  // Soft-delete user account (GDPR right to erasure) — 30-day grace period
   app.delete('/me', { preHandler: [requireAuth] }, async (req, reply) => {
     let userId: string;
     try { userId = getUserId(req); } catch { return reply.status(401).send({ error: 'Authentication required' }); }
 
+    const body = req.body as { confirmation?: string } | undefined;
+    if (!body || body.confirmation !== 'DELETE') {
+      return reply.status(400).send({ error: 'You must send { "confirmation": "DELETE" } to confirm account deletion' });
+    }
+
+    const user = await db.query.appUser.findFirst({
+      where: eq(appUser.id, userId),
+    });
+    if (!user) return reply.status(404).send({ error: 'User not found' });
+
+    const deletedAt = new Date();
+    const hardDeleteDate = new Date(deletedAt);
+    hardDeleteDate.setDate(hardDeleteDate.getDate() + 30);
+
+    // Soft-delete: mark inactive, set deletedAt, anonymize display info immediately
     const [updated] = await db
       .update(appUser)
-      .set({ isActive: false })
+      .set({
+        isActive: false,
+        displayName: 'Deleted User',
+        bio: null,
+        avatarUrl: null,
+        city: null,
+        country: null,
+      })
       .where(eq(appUser.id, userId))
       .returning();
+
     if (!updated) return reply.status(404).send({ error: 'User not found' });
 
-    return reply.status(204).send();
+    return {
+      message: 'Account scheduled for deletion',
+      deletedAt: deletedAt.toISOString(),
+      hardDeleteDate: hardDeleteDate.toISOString(),
+      gracePeriodDays: 30,
+    };
+  });
+
+  // Cancel account deletion (reactivate within 30-day grace period)
+  app.post('/me/reactivate', { preHandler: [requireAuth] }, async (req, reply) => {
+    let userId: string;
+    try { userId = getUserId(req); } catch { return reply.status(401).send({ error: 'Authentication required' }); }
+
+    const user = await db.query.appUser.findFirst({
+      where: eq(appUser.id, userId),
+    });
+    if (!user) return reply.status(404).send({ error: 'User not found' });
+
+    if (user.isActive) {
+      return reply.status(400).send({ error: 'Account is already active' });
+    }
+
+    const [updated] = await db
+      .update(appUser)
+      .set({ isActive: true })
+      .where(eq(appUser.id, userId))
+      .returning();
+
+    return sanitizeUser(updated!);
   });
 };

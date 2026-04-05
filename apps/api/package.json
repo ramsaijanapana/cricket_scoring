@@ -16,6 +16,7 @@
     "db:seed": "tsx src/db/seed.ts"
   },
   "dependencies": {
+    "@sentry/node": "^8.0.0",
     "@aws-sdk/client-s3": "^3.1024.0",
     "@cricket/shared": "*",
     "@fastify/cors": "^10.0.0",

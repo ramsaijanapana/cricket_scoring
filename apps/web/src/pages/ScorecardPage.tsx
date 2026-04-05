@@ -1,8 +1,10 @@
+import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardList, ArrowLeft } from 'lucide-react';
+import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Printer } from 'lucide-react';
 import { api } from '../lib/api';
+import { CommentaryFeed } from '../components/CommentaryFeed';
 
 const inningsContainerVariants = {
   hidden: {},
@@ -37,8 +39,11 @@ const bowlingTableVariants = {
   visible: { transition: { staggerChildren: 0.02 } },
 };
 
+type ScorecardTab = 'scorecard' | 'commentary';
+
 export function ScorecardPage() {
   const { id: matchId } = useParams<{ id: string }>();
+  const [activeTab, setActiveTab] = useState<ScorecardTab>('scorecard');
 
   const { data: scorecard, isLoading } = useQuery({
     queryKey: ['scorecard', matchId],
@@ -123,18 +128,45 @@ export function ScorecardPage() {
       transition={{ duration: 0.3 }}
       className="max-w-4xl mx-auto"
     >
-      {/* Back button */}
+      {/* Back button + PDF download */}
       <motion.div
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="mb-4"
+        className="mb-4 flex items-center"
       >
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-theme-tertiary hover:text-theme-primary transition-colors min-h-0 min-w-0 py-1">
           <ArrowLeft size={16} />
           <span>Back to Matches</span>
         </Link>
+        <motion.button
+          whileHover={{ scale: 1.03 }}
+          whileTap={{ scale: 0.97 }}
+          onClick={() => window.print()}
+          className="btn-outline text-sm flex items-center gap-1.5 ml-auto no-print"
+          data-no-print
+        >
+          <Printer size={14} />
+          Download PDF
+        </motion.button>
       </motion.div>
+
+      {/* Tab navigation */}
+      <div className="flex items-center gap-1 mb-6 p-1 rounded-xl" style={{ background: 'var(--bg-hover)' }}>
+        <span
+          className="flex-1 text-center text-sm font-semibold py-2.5 rounded-lg bg-cricket-green text-white min-h-0"
+          style={{ cursor: 'default' }}
+        >
+          Scorecard
+        </span>
+        <Link
+          to={`/matches/${matchId}/analytics`}
+          className="flex-1 text-center text-sm font-semibold py-2.5 rounded-lg text-theme-tertiary hover:text-theme-primary transition-colors min-h-0 flex items-center justify-center gap-1.5"
+        >
+          <BarChart3 size={14} />
+          Analytics
+        </Link>
+      </div>
 
       {/* Match header */}
       {matchData && (
@@ -192,19 +224,76 @@ export function ScorecardPage() {
         </motion.div>
       )}
 
-      {/* Innings scorecards */}
-      <motion.div
-        variants={inningsContainerVariants}
-        initial="hidden"
-        animate="visible"
-        className="space-y-6"
-      >
-        {scorecard.map((inningsData: any, idx: number) => (
-          <motion.div key={idx} variants={inningsCardVariants}>
-            <InningsScorecard data={inningsData} inningsNumber={idx + 1} />
+      {/* Tab switcher: Scorecard | Commentary */}
+      <div className="flex items-center gap-1 p-1 rounded-xl mb-6" style={{ background: 'var(--bg-hover)' }}>
+        <button
+          onClick={() => setActiveTab('scorecard')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+            activeTab === 'scorecard'
+              ? 'bg-[var(--bg-card)] text-theme-primary shadow-sm'
+              : 'text-theme-tertiary hover:text-theme-secondary'
+          }`}
+          aria-pressed={activeTab === 'scorecard'}
+        >
+          <BarChart3 size={13} />
+          Scorecard
+        </button>
+        <button
+          onClick={() => setActiveTab('commentary')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+            activeTab === 'commentary'
+              ? 'bg-[var(--bg-card)] text-theme-primary shadow-sm'
+              : 'text-theme-tertiary hover:text-theme-secondary'
+          }`}
+          aria-pressed={activeTab === 'commentary'}
+        >
+          <MessageSquare size={13} />
+          Commentary
+        </button>
+      </div>
+
+      {/* Tab content */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'scorecard' ? (
+          <motion.div
+            key="scorecard-tab"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            {/* Innings scorecards */}
+            <motion.div
+              variants={inningsContainerVariants}
+              initial="hidden"
+              animate="visible"
+              className="space-y-6"
+            >
+              {scorecard.map((inningsData: any, idx: number) => (
+                <motion.div key={idx} variants={inningsCardVariants}>
+                  <InningsScorecard data={inningsData} inningsNumber={idx + 1} />
+                </motion.div>
+              ))}
+            </motion.div>
           </motion.div>
-        ))}
-      </motion.div>
+        ) : (
+          <motion.div
+            key="commentary-tab"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <div className="card p-4">
+              <div className="flex items-center gap-2 mb-4 pb-3 divider">
+                <MessageSquare size={14} className="text-cricket-green" />
+                <span className="text-sm font-bold text-theme-primary">Ball-by-Ball Commentary</span>
+              </div>
+              <CommentaryFeed matchId={matchId!} />
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

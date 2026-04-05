@@ -945,4 +945,72 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
 
     return { success: true, id: deleted.id };
   });
+
+  // ─── Scorer Assignment ──────────────────────────────────────────────────────
+
+  // Assign scorer to a match
+  app.post<{ Params: { id: string } }>(
+    '/:id/scorers',
+    { preHandler: [requireAuth] },
+    async (req, reply) => {
+      const body = req.body as { userId: string; slot?: number };
+      if (!body.userId) {
+        return reply.status(400).send({ error: 'userId is required' });
+      }
+
+      const m = await db.query.match.findFirst({
+        where: eq(match.id, req.params.id),
+      });
+      if (!m) return reply.status(404).send({ error: 'Match not found' });
+
+      const officials = (m.matchOfficials as Record<string, unknown>) || {};
+      const scorers = (officials.scorers as string[]) || [];
+
+      if (scorers.includes(body.userId)) {
+        return reply.status(409).send({ error: 'User is already a scorer for this match' });
+      }
+
+      if (scorers.length >= 2) {
+        return reply.status(400).send({ error: 'Maximum 2 scorers allowed per match' });
+      }
+
+      scorers.push(body.userId);
+      officials.scorers = scorers;
+
+      await db.update(match)
+        .set({ matchOfficials: officials })
+        .where(eq(match.id, req.params.id));
+
+      return { scorers };
+    }
+  );
+
+  // Revoke scorer
+  app.delete<{ Params: { id: string; userId: string } }>(
+    '/:id/scorers/:userId',
+    { preHandler: [requireAuth] },
+    async (req, reply) => {
+      const m = await db.query.match.findFirst({
+        where: eq(match.id, req.params.id),
+      });
+      if (!m) return reply.status(404).send({ error: 'Match not found' });
+
+      const officials = (m.matchOfficials as Record<string, unknown>) || {};
+      const scorers = (officials.scorers as string[]) || [];
+      const idx = scorers.indexOf(req.params.userId);
+
+      if (idx === -1) {
+        return reply.status(404).send({ error: 'User is not a scorer for this match' });
+      }
+
+      scorers.splice(idx, 1);
+      officials.scorers = scorers;
+
+      await db.update(match)
+        .set({ matchOfficials: officials })
+        .where(eq(match.id, req.params.id));
+
+      return reply.status(204).send();
+    }
+  );
 };

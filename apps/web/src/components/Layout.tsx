@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Monitor, Sun, Moon, LayoutList, Plus } from 'lucide-react';
+import { Monitor, Sun, Moon, LayoutList, Plus, Trophy, Settings } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useTheme } from '../hooks/useTheme';
 
@@ -81,10 +81,24 @@ export function Layout() {
               <NavLink to="/" active={location.pathname === '/'} icon={<LayoutList size={16} />}>
                 Matches
               </NavLink>
+              <NavLink to="/tournaments" active={location.pathname.startsWith('/tournaments')} icon={<Trophy size={16} />}>
+                Tournaments
+              </NavLink>
               <NavLink to="/matches/new" active={location.pathname === '/matches/new'} accent icon={<Plus size={16} />}>
                 New
               </NavLink>
             </nav>
+
+            <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+              <Link
+                to="/settings"
+                className="flex items-center justify-center w-9 h-9 min-h-0 min-w-0 rounded-xl transition-colors duration-200 text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]"
+                title="Settings"
+                aria-label="Settings"
+              >
+                <Settings size={16} />
+              </Link>
+            </motion.div>
 
             <motion.button
               onClick={cycleTheme}

@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-04-05T23:42:14.226Z
+- Updated: 2026-04-05T23:56:51.124Z
 - Branch: main
-- Head: 3b7e158
+- Head: 512076b
 - Focus: npm command troubleshooting
 
 ## Latest Summary
 
-- Sprint 1-2: DLS engine, secrets management, CI/CD, load tests, engine rules (free-hit chain, powerplay, batting order, sessions, bonus points, super over)
+- Sprint 3-6: Toss wizard, commentary feed, sync badge, analytics charts, Sentry, Docker prod, tournaments, GDPR, PDF export
 
 ## Next Steps
 
-- Sprint 3-5: UI/UX, analytics charts, infrastructure
+- Sprint 7-8: Push notifications, social features, mobile, P2/P3 polish
 
 ## Risks / Watchouts
 
@@ -32,31 +32,37 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 43
+- Changed files: 34
 - Staged files: 0
 - claude/worktrees/agent-a6aaeee9
-- .github/workflows/ci.yml
-- .gitignore
-- apps/api/.env.example
-- apps/api/Dockerfile
 - apps/api/package.json
-- apps/api/src/config.ts
-- apps/api/src/db/index.ts
-- apps/api/src/db/migrate.ts
-- apps/api/src/db/schema/match-format.ts
-- apps/api/src/db/seed.ts
-- apps/api/src/engine/scoring-engine.test.ts
-- apps/api/src/engine/scoring-engine.ts
-- apps/api/src/middleware/auth.ts
-- apps/api/src/routes/auth.ts
-- apps/api/src/routes/deliveries.ts
-- apps/api/src/routes/innings.ts
 - apps/api/src/routes/matches.ts
+- apps/api/src/routes/users.ts
 - apps/api/src/server.ts
-- apps/api/src/services/email-service.ts
-- +23 more changed files
+- apps/web/package.json
+- apps/web/src/App.tsx
+- apps/web/src/components/Layout.tsx
+- apps/web/src/lib/api.ts
+- apps/web/src/main.tsx
+- apps/web/src/pages/ScorecardPage.tsx
+- apps/web/src/pages/ScoringPage.tsx
+- apps/web/src/styles/globals.css
+- docker-compose.yml
+- package-lock.json
+- apps/api/src/middleware/metrics.ts
+- apps/api/src/middleware/request-logger.ts
+- apps/api/src/routes/tournaments.ts
+- apps/api/src/services/sentry.ts
+- apps/web/src/components/CommentaryEditor.tsx
+- +14 more changed files
 
 ## Recent Checkpoints
+
+### 2026-04-05T23:56:51.124Z — npm command troubleshooting
+
+- Actor: ramsa
+- Summary: Sprint 3-6: Toss wizard, commentary feed, sync badge, analytics charts, Sentry, Docker prod, tournaments, GDPR, PDF export
+- Next: Sprint 7-8: Push notifications, social features, mobile, P2/P3 polish
 
 ### 2026-04-05T23:42:14.226Z — npm command troubleshooting
 
@@ -81,13 +87,6 @@
 - Actor: ramsa
 - Summary: Fixed run-out dismissal selection, innings completion guard, over broadcast stats, dead ball validation
 - Next: DLS calculation logic, milestone detection, prediction broadcast
-
-### 2026-04-05T19:16:25.784Z — npm command troubleshooting
-
-- Actor: ramsa
-- Summary: Diagnosed npm command resolution in PowerShell and confirmed npm itself is installed and runnable. | Verified this shell resolves npm to C:\Program Files\nodejs\npm.ps1, with npm.cmd also available as a reliable fallback.
-- Next: If interactive PowerShell still blocks npm for the user, use npm.cmd or adjust PowerShell execution policy/profile resolution.
-- Verified: Ran npm run context:status successfully. | Ran npm -v successfully and confirmed npm resolves to npm.ps1 plus npm.cmd via Get-Command and where.exe.
 
 ## Workflow Rule
 

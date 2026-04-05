@@ -33,9 +33,17 @@ import { notificationRoutes } from './routes/notifications';
 import { fantasyRoutes } from './routes/fantasy';
 import { leaderboardRoutes } from './routes/leaderboards';
 import { trendingRoutes } from './routes/trending';
+import { tournamentRoutes } from './routes/tournaments';
 import { startWorkers } from './workers/index';
 import { env } from './config';
 import { validateEnvironment } from './middleware/env-check';
+import { initSentry, registerSentryErrorHandler, flushSentry } from './services/sentry';
+import { registerMetrics } from './middleware/metrics';
+import { registerRequestLogger } from './middleware/request-logger';
+import { getRedisClient } from './services/cache';
+
+// Initialize Sentry before anything else so startup errors are captured
+initSentry();
 
 // Block startup if critical env vars are missing or invalid
 validateEnvironment();
@@ -78,6 +86,13 @@ async function buildApp() {
       },
     });
   });
+
+  // ─── Sentry error tracking (captures 5xx only) ───────────────────────────
+  registerSentryErrorHandler(app);
+
+  // ─── Observability middleware ─────────────────────────────────────────────
+  await registerMetrics(app);
+  await registerRequestLogger(app);
 
   await app.register(cors, {
     origin: env.NODE_ENV === 'production'
@@ -147,32 +162,53 @@ async function buildApp() {
     request.log = request.log.child({ requestId });
   });
 
-  // Health check
-  app.get('/health', async (request, reply) => {
-    const checks: Record<string, string> = {
+  // ─── Health check (used by Docker, load balancer, monitoring) ──────────────
+  app.get('/health', async (_request, reply) => {
+    const health: Record<string, unknown> = {
       status: 'ok',
       timestamp: new Date().toISOString(),
       uptime: `${Math.floor(process.uptime())}s`,
+      version: process.env.APP_VERSION || process.env.npm_package_version || '0.0.0',
     };
 
     // Check database
     try {
       await db.execute(sql`SELECT 1`);
-      checks.database = 'ok';
+      health.database = 'ok';
     } catch {
-      checks.database = 'error';
-      checks.status = 'degraded';
+      health.database = 'error';
+      health.status = 'degraded';
     }
 
-    const statusCode = checks.status === 'ok' ? 200 : 503;
-    return reply.status(statusCode).send(checks);
+    // Check Redis
+    try {
+      const redis = getRedisClient();
+      if (redis) {
+        const pong = await redis.ping();
+        health.redis = pong === 'PONG' ? 'ok' : 'error';
+      } else {
+        health.redis = 'unavailable';
+      }
+    } catch {
+      health.redis = 'error';
+      health.status = 'degraded';
+    }
+
+    // If any dependency is down, return 503
+    const isHealthy = health.database === 'ok' && health.redis !== 'error';
+    if (!isHealthy) {
+      health.status = 'degraded';
+    }
+
+    const statusCode = health.status === 'ok' ? 200 : 503;
+    return reply.status(statusCode).send(health);
   });
 
   // Auth middleware — context.md section 6.4
   // Skip auth for health check and auth endpoints; allow unauthenticated in dev mode
   app.addHook('onRequest', async (request, reply) => {
     const url = request.url;
-    if (url === '/health' || url.startsWith('/api/v1/auth') || url.startsWith('/docs')) return;
+    if (url === '/health' || url === '/metrics' || url.startsWith('/api/v1/auth') || url.startsWith('/docs')) return;
 
     const authHeader = request.headers.authorization;
     if (!authHeader) return; // Allow unauthenticated access (dev mode)
@@ -237,6 +273,9 @@ async function buildApp() {
   // Trending (Phase 2B-2F)
   app.register(trendingRoutes, { prefix: '/api/v1/trending' });
 
+  // Tournaments (Sprint 6)
+  app.register(tournamentRoutes, { prefix: '/api/v1/tournaments' });
+
   // Attach Socket.IO to the shared HTTP server
   await initSocketIO(httpServer);
 
@@ -261,6 +300,7 @@ async function start() {
   const shutdown = async (signal: string) => {
     console.log(`${signal} received, shutting down gracefully...`);
     try {
+      await flushSentry();
       await app.close();
       httpServer.close();
       process.exit(0);

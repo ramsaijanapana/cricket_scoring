@@ -717,3 +717,150 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* ─── Print Stylesheet for Scorecard PDF Export ─────────────────────────────── */
+@media print {
+  /* Reset backgrounds and colors for printing */
+  :root {
+    --bg-primary: #ffffff !important;
+    --bg-card: #ffffff !important;
+    --bg-card-border: #e5e5e5 !important;
+    --text-primary: #000000 !important;
+    --text-secondary: #333333 !important;
+    --text-tertiary: #666666 !important;
+    --text-muted: #999999 !important;
+    --border-subtle: #e5e5e5 !important;
+    --bg-hover: #f5f5f5 !important;
+    --shadow-card: none !important;
+  }
+
+  /* Hide non-essential elements */
+  header,
+  footer,
+  nav,
+  .no-print,
+  .btn-primary,
+  .btn-outline,
+  .btn-ghost,
+  .btn-danger,
+  [data-no-print] {
+    display: none !important;
+  }
+
+  /* Page setup */
+  @page {
+    margin: 1.5cm;
+    size: A4;
+  }
+
+  body {
+    background: white !important;
+    background-image: none !important;
+    color: black !important;
+    font-size: 11pt !important;
+    line-height: 1.4 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Ensure cards lay flat */
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #ddd !important;
+    background: white !important;
+    backdrop-filter: none !important;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    border-radius: 0 !important;
+    padding: 12pt !important;
+    margin-bottom: 10pt !important;
+  }
+
+  /* Remove gradient strips */
+  .gradient-strip-top::before,
+  .card-gradient::before,
+  .pitch-texture::before,
+  .live-ring::after,
+  .noise-subtle::before,
+  .header-gradient-line::after {
+    display: none !important;
+  }
+
+  /* Tables should be readable */
+  table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    padding: 4pt 6pt !important;
+    border-bottom: 0.5pt solid #ddd !important;
+    font-size: 10pt !important;
+  }
+
+  th {
+    font-weight: 700 !important;
+    background: #f5f5f5 !important;
+  }
+
+  /* Score display */
+  .score-big {
+    background: none !important;
+    -webkit-text-fill-color: #16a34a !important;
+    color: #16a34a !important;
+    font-size: 24pt !important;
+  }
+
+  /* Milestone colors for print */
+  .text-cricket-green { color: #16a34a !important; }
+  .text-cricket-red { color: #ef4444 !important; }
+  .text-cricket-gold { color: #b8860b !important; }
+
+  /* Extra chips */
+  .extra-chip {
+    border: 0.5pt solid #ddd !important;
+    background: #f9f9f9 !important;
+    color: #333 !important;
+  }
+
+  /* Fall of wickets */
+  .rounded-xl[style*="background: var(--bg-hover)"] {
+    background: #f5f5f5 !important;
+  }
+
+  /* Print header - show match info prominently */
+  .print-header {
+    display: block !important;
+    text-align: center;
+    margin-bottom: 12pt;
+    padding-bottom: 8pt;
+    border-bottom: 2pt solid #16a34a;
+  }
+
+  /* Ensure tabular nums still work */
+  [style*="fontVariantNumeric"] {
+    font-variant-numeric: tabular-nums !important;
+  }
+
+  /* Remove animations */
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  /* Remove backdrop blur */
+  [class*="backdrop-blur"] {
+    backdrop-filter: none !important;
+  }
+
+  /* Links should not be underlined or colored */
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  /* Hide back buttons */
+  a[href="/"] {
+    display: none !important;
+  }
+}
