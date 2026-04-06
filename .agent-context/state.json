@@ -1,14 +1,14 @@
 {
   "project": "cricket_scoring",
-  "updatedAt": "2026-04-06T01:02:13.550Z",
+  "updatedAt": "2026-04-06T01:11:48.127Z",
   "branch": "main",
-  "head": "03f9826",
+  "head": "416b773",
   "currentFocus": "npm command troubleshooting",
   "latestSummary": [
-    "Implemented all remaining features"
+    "Added PDF scorecard export - all 60 enhancements complete"
   ],
   "nextSteps": [
-    "E2E testing"
+    "E2E testing and production deployment"
   ],
   "risks": [
     "Interactive PowerShell may still fail on machines where npm.ps1 is blocked by execution policy even though npm works in non-interactive runners."
@@ -22,75 +22,34 @@
   ],
   "workingTree": {
     "changedFiles": [
-      "agent-context/state.json",
-      "apps/api/src/engine/markov-engine.ts",
-      "apps/api/src/engine/score-projection.ts",
-      "apps/api/src/middleware/apm.ts",
-      "apps/api/src/middleware/metrics.ts",
-      "apps/api/src/routes/broadcaster.ts",
-      "apps/api/src/routes/career-stats.ts",
-      "apps/api/src/routes/innings.ts",
-      "apps/api/src/routes/players.ts",
-      "apps/api/src/server.ts",
-      "apps/api/src/services/presence.ts",
-      "apps/mobile/app.json",
-      "apps/mobile/app/matches/[id]/score.tsx",
-      "apps/mobile/eas.json",
-      "apps/mobile/lib/haptics.ts",
-      "apps/mobile/lib/notifications.ts",
-      "apps/mobile/lib/offline-sync.ts",
-      "apps/mobile/lib/socket.ts",
-      "apps/mobile/package.json",
-      "apps/web/src/App.tsx",
-      "apps/web/src/components/FielderPositionSelector.tsx",
-      "apps/web/src/components/HeadToHeadCard.tsx",
-      "apps/web/src/components/MatchBreakScreen.tsx",
-      "apps/web/src/components/SpectatorBadge.tsx",
-      "apps/web/src/components/charts/HeadToHeadCard.tsx",
-      "apps/web/src/components/charts/LivePredictionChart.tsx",
-      "apps/web/src/components/charts/PartnershipChart.tsx",
-      "apps/web/src/components/charts/index.ts",
-      "apps/web/src/lib/api.ts",
-      "apps/web/src/pages/AnalyticsPage.tsx",
-      "apps/web/src/pages/OverByOverPage.tsx",
-      "apps/web/src/pages/RecordsPage.tsx"
+      "pps/api/package.json",
+      "apps/api/src/routes/scorecard.ts",
+      "apps/web/src/pages/ScorecardPage.tsx",
+      "package-lock.json"
     ],
-    "stagedFiles": [
-      "AGENT_HANDOFF.md",
-      "apps/api/src/engine/markov-engine.ts",
-      "apps/api/src/engine/score-projection.ts",
-      "apps/api/src/middleware/apm.ts",
-      "apps/api/src/middleware/metrics.ts",
-      "apps/api/src/routes/broadcaster.ts",
-      "apps/api/src/routes/career-stats.ts",
-      "apps/api/src/routes/innings.ts",
-      "apps/api/src/routes/players.ts",
-      "apps/api/src/server.ts",
-      "apps/api/src/services/presence.ts",
-      "apps/mobile/app.json",
-      "apps/mobile/app/matches/[id]/score.tsx",
-      "apps/mobile/eas.json",
-      "apps/mobile/lib/haptics.ts",
-      "apps/mobile/lib/notifications.ts",
-      "apps/mobile/lib/offline-sync.ts",
-      "apps/mobile/lib/socket.ts",
-      "apps/mobile/package.json",
-      "apps/web/src/App.tsx",
-      "apps/web/src/components/FielderPositionSelector.tsx",
-      "apps/web/src/components/HeadToHeadCard.tsx",
-      "apps/web/src/components/MatchBreakScreen.tsx",
-      "apps/web/src/components/SpectatorBadge.tsx",
-      "apps/web/src/components/charts/HeadToHeadCard.tsx",
-      "apps/web/src/components/charts/LivePredictionChart.tsx",
-      "apps/web/src/components/charts/PartnershipChart.tsx",
-      "apps/web/src/components/charts/index.ts",
-      "apps/web/src/lib/api.ts",
-      "apps/web/src/pages/AnalyticsPage.tsx",
-      "apps/web/src/pages/OverByOverPage.tsx",
-      "apps/web/src/pages/RecordsPage.tsx"
-    ]
+    "stagedFiles": []
   },
   "recentCheckpoints": [
+    {
+      "updatedAt": "2026-04-06T01:11:48.127Z",
+      "actor": "ramsa",
+      "focus": "npm command troubleshooting",
+      "summary": [
+        "Added PDF scorecard export - all 60 enhancements complete"
+      ],
+      "nextSteps": [
+        "E2E testing and production deployment"
+      ],
+      "risks": [],
+      "decisions": [],
+      "verification": [],
+      "changedFiles": [
+        "pps/api/package.json",
+        "apps/api/src/routes/scorecard.ts",
+        "apps/web/src/pages/ScorecardPage.tsx",
+        "package-lock.json"
+      ]
+    },
     {
       "updatedAt": "2026-04-06T01:02:13.550Z",
       "actor": "ramsa",
@@ -377,24 +336,6 @@
         "scripts/load-tests/spectator-load.js",
         "scripts/load-tests/stress-test.js",
         "scripts/load-tests/websocket-connections.js"
-      ]
-    },
-    {
-      "updatedAt": "2026-04-05T23:27:55.022Z",
-      "actor": "ramsa",
-      "focus": "npm command troubleshooting",
-      "summary": [
-        "All gaps filled, enhancements backlog created"
-      ],
-      "nextSteps": [
-        "Sprint 1: DLS calculation, secrets management, load testing"
-      ],
-      "risks": [],
-      "decisions": [],
-      "verification": [],
-      "changedFiles": [
-        "claude/worktrees/agent-a6aaeee9",
-        "ENHANCEMENTS.md"
       ]
     }
   ]

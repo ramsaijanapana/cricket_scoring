@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Printer, History } from 'lucide-react';
+import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Download, History, Loader2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { CommentaryFeed } from '../components/CommentaryFeed';
 import { MatchChat } from '../components/MatchChat';
@@ -46,6 +46,7 @@ type ScorecardTab = 'scorecard' | 'commentary' | 'audit';
 export function ScorecardPage() {
   const { id: matchId } = useParams<{ id: string }>();
   const [activeTab, setActiveTab] = useState<ScorecardTab>('scorecard');
+  const [pdfLoading, setPdfLoading] = useState(false);
 
   const { data: scorecard, isLoading } = useQuery({
     queryKey: ['scorecard', matchId],
@@ -144,12 +145,37 @@ export function ScorecardPage() {
         <motion.button
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
-          onClick={() => window.print()}
+          disabled={pdfLoading}
+          onClick={async () => {
+            if (!matchId) return;
+            setPdfLoading(true);
+            try {
+              const API_BASE = import.meta.env.VITE_API_URL || '/api/v1';
+              const res = await fetch(`${API_BASE}/matches/${matchId}/scorecard/pdf`);
+              if (!res.ok) throw new Error('Failed to generate PDF');
+              const blob = await res.blob();
+              const url = URL.createObjectURL(blob);
+              const team1 = matchData?.teams?.[0]?.teamName || 'Team1';
+              const team2 = matchData?.teams?.[1]?.teamName || 'Team2';
+              const filename = `${team1}_vs_${team2}_scorecard.pdf`.replace(/\s+/g, '_');
+              const a = document.createElement('a');
+              a.href = url;
+              a.download = filename;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+            } catch (err) {
+              console.error('PDF download failed:', err);
+            } finally {
+              setPdfLoading(false);
+            }
+          }}
           className="btn-outline text-sm flex items-center gap-1.5 ml-auto no-print"
           data-no-print
         >
-          <Printer size={14} />
-          Download PDF
+          {pdfLoading ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+          {pdfLoading ? 'Generating...' : 'Download PDF'}
         </motion.button>
       </motion.div>
 
