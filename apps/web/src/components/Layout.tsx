@@ -1,8 +1,9 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Monitor, Sun, Moon, LayoutList, Plus, Trophy, Settings } from 'lucide-react';
+import { Monitor, Sun, Moon, LayoutList, Plus, Trophy, Settings, Rss } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useTheme } from '../hooks/useTheme';
+import { NotificationBell } from './NotificationBell';
 
 const themeIcons: Record<string, { icon: typeof Monitor; rotate: number }> = {
   system: { icon: Monitor, rotate: 0 },
@@ -84,10 +85,15 @@ export function Layout() {
               <NavLink to="/tournaments" active={location.pathname.startsWith('/tournaments')} icon={<Trophy size={16} />}>
                 Tournaments
               </NavLink>
+              <NavLink to="/feed" active={location.pathname === '/feed'} icon={<Rss size={16} />}>
+                Feed
+              </NavLink>
               <NavLink to="/matches/new" active={location.pathname === '/matches/new'} accent icon={<Plus size={16} />}>
                 New
               </NavLink>
             </nav>
+
+            <NotificationBell />
 
             <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
               <Link

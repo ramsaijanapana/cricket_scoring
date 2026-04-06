@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
-import { player, playerTeamMembership } from '../db/schema/index';
-import { eq } from 'drizzle-orm';
+import { player, playerTeamMembership, battingScorecard, innings } from '../db/schema/index';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import { parsePagination, paginatedResponse } from '../middleware/pagination';
 
 export const playerRoutes: FastifyPluginAsync = async (app) => {
@@ -79,5 +79,72 @@ export const playerRoutes: FastifyPluginAsync = async (app) => {
       joinedAt: req.body.joinedAt,
     }).returning();
     return reply.status(201).send(membership);
+  });
+
+  // GET /:id/form — Player form tracking (last 5 innings)
+  app.get<{ Params: { id: string } }>('/:id/form', async (req, reply) => {
+    const result = await db.query.player.findFirst({
+      where: eq(player.id, req.params.id),
+    });
+    if (!result) return reply.status(404).send({ error: 'Player not found' });
+
+    // Get last 5 batting innings (non-DNB), ordered by most recent
+    const recentInnings = await db
+      .select({
+        runsScored: battingScorecard.runsScored,
+        ballsFaced: battingScorecard.ballsFaced,
+        isOut: battingScorecard.isOut,
+        didNotBat: battingScorecard.didNotBat,
+        strikeRate: battingScorecard.strikeRate,
+        inningsId: battingScorecard.inningsId,
+      })
+      .from(battingScorecard)
+      .innerJoin(innings, eq(battingScorecard.inningsId, innings.id))
+      .where(
+        and(
+          eq(battingScorecard.playerId, req.params.id),
+          eq(battingScorecard.didNotBat, false),
+        ),
+      )
+      .orderBy(desc(innings.startedAt))
+      .limit(5);
+
+    if (recentInnings.length === 0) {
+      return {
+        playerId: req.params.id,
+        innings: 0,
+        average: 0,
+        strikeRate: 0,
+        trend: 'stable' as const,
+        dataPoints: [],
+      };
+    }
+
+    // Calculate averages
+    const totalRuns = recentInnings.reduce((s, i) => s + i.runsScored, 0);
+    const outs = recentInnings.filter(i => i.isOut).length;
+    const totalBalls = recentInnings.reduce((s, i) => s + i.ballsFaced, 0);
+    const average = outs > 0 ? totalRuns / outs : totalRuns;
+    const sr = totalBalls > 0 ? (totalRuns / totalBalls) * 100 : 0;
+
+    // Trend: compare first half vs second half of recent innings
+    const dataPoints = recentInnings.map(i => i.runsScored).reverse(); // oldest first
+    let trend: 'up' | 'down' | 'stable' = 'stable';
+    if (dataPoints.length >= 3) {
+      const mid = Math.floor(dataPoints.length / 2);
+      const firstHalfAvg = dataPoints.slice(0, mid).reduce((a, b) => a + b, 0) / mid;
+      const secondHalfAvg = dataPoints.slice(mid).reduce((a, b) => a + b, 0) / (dataPoints.length - mid);
+      if (secondHalfAvg > firstHalfAvg * 1.15) trend = 'up';
+      else if (secondHalfAvg < firstHalfAvg * 0.85) trend = 'down';
+    }
+
+    return {
+      playerId: req.params.id,
+      innings: recentInnings.length,
+      average: Math.round(average * 100) / 100,
+      strikeRate: Math.round(sr * 100) / 100,
+      trend,
+      dataPoints,
+    };
   });
 };

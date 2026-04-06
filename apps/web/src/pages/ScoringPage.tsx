@@ -13,6 +13,7 @@ import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { TossWizard } from '../components/TossWizard';
 import { SyncStatusBadge } from '../components/SyncStatusBadge';
 import { CommentaryEditor } from '../components/CommentaryEditor';
+import { MatchChat } from '../components/MatchChat';
 
 type ExtrasMode = 'normal' | 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty';
 
@@ -1631,6 +1632,8 @@ export function ScoringPage() {
           </motion.div>
         )}
       </AnimatePresence>
+      {/* Match Chat */}
+      {matchId && <MatchChat matchId={matchId} />}
     </motion.div>
   );
 }

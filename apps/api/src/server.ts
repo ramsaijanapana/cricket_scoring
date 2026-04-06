@@ -34,6 +34,9 @@ import { fantasyRoutes } from './routes/fantasy';
 import { leaderboardRoutes } from './routes/leaderboards';
 import { trendingRoutes } from './routes/trending';
 import { tournamentRoutes } from './routes/tournaments';
+import { auditLogRoutes } from './routes/audit-log';
+import { reactionRoutes } from './routes/reactions';
+import { venueRoutes } from './routes/venues';
 import { startWorkers } from './workers/index';
 import { env } from './config';
 import { validateEnvironment } from './middleware/env-check';
@@ -275,6 +278,15 @@ async function buildApp() {
 
   // Tournaments (Sprint 6)
   app.register(tournamentRoutes, { prefix: '/api/v1/tournaments' });
+
+  // Audit Log (P2)
+  app.register(auditLogRoutes, { prefix: '/api/v1/matches' });
+
+  // Emoji Reactions (P3)
+  app.register(reactionRoutes, { prefix: '/api/v1/matches' });
+
+  // Venue Statistics (P3)
+  app.register(venueRoutes, { prefix: '/api/v1/venues' });
 
   // Attach Socket.IO to the shared HTTP server
   await initSocketIO(httpServer);

@@ -2,9 +2,11 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Printer } from 'lucide-react';
+import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Printer, History } from 'lucide-react';
 import { api } from '../lib/api';
 import { CommentaryFeed } from '../components/CommentaryFeed';
+import { MatchChat } from '../components/MatchChat';
+import { AuditLogPanel } from '../components/AuditLogPanel';
 
 const inningsContainerVariants = {
   hidden: {},
@@ -39,7 +41,7 @@ const bowlingTableVariants = {
   visible: { transition: { staggerChildren: 0.02 } },
 };
 
-type ScorecardTab = 'scorecard' | 'commentary';
+type ScorecardTab = 'scorecard' | 'commentary' | 'audit';
 
 export function ScorecardPage() {
   const { id: matchId } = useParams<{ id: string }>();
@@ -224,7 +226,7 @@ export function ScorecardPage() {
         </motion.div>
       )}
 
-      {/* Tab switcher: Scorecard | Commentary */}
+      {/* Tab switcher: Scorecard | Commentary | Audit Log */}
       <div className="flex items-center gap-1 p-1 rounded-xl mb-6" style={{ background: 'var(--bg-hover)' }}>
         <button
           onClick={() => setActiveTab('scorecard')}
@@ -249,6 +251,18 @@ export function ScorecardPage() {
         >
           <MessageSquare size={13} />
           Commentary
+        </button>
+        <button
+          onClick={() => setActiveTab('audit')}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold transition-all duration-200 ${
+            activeTab === 'audit'
+              ? 'bg-[var(--bg-card)] text-theme-primary shadow-sm'
+              : 'text-theme-tertiary hover:text-theme-secondary'
+          }`}
+          aria-pressed={activeTab === 'audit'}
+        >
+          <History size={13} />
+          Audit Log
         </button>
       </div>
 
@@ -276,7 +290,7 @@ export function ScorecardPage() {
               ))}
             </motion.div>
           </motion.div>
-        ) : (
+        ) : activeTab === 'commentary' ? (
           <motion.div
             key="commentary-tab"
             initial={{ opacity: 0 }}
@@ -292,8 +306,27 @@ export function ScorecardPage() {
               <CommentaryFeed matchId={matchId!} />
             </div>
           </motion.div>
-        )}
+        ) : activeTab === 'audit' ? (
+          <motion.div
+            key="audit-tab"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <div className="card p-4">
+              <div className="flex items-center gap-2 mb-4 pb-3 divider">
+                <History size={14} className="text-cricket-gold" />
+                <span className="text-sm font-bold text-theme-primary">Undo & Correction History</span>
+              </div>
+              <AuditLogPanel matchId={matchId!} />
+            </div>
+          </motion.div>
+        ) : null}
       </AnimatePresence>
+
+      {/* Match Chat */}
+      {matchId && <MatchChat matchId={matchId} />}
     </motion.div>
   );
 }

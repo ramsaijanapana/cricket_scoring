@@ -1,11 +1,14 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { delivery, innings, partnership, player, matchFormatConfig } from '../db/schema/index';
-import { match } from '../db/schema/match';
+import { match, matchTeam } from '../db/schema/match';
+import { teamFollow } from '../db/schema/follow';
+import { team } from '../db/schema/team';
 import { battingScorecard, bowlingScorecard } from '../db/schema/scorecard';
 import { scoringEngine } from '../engine/scoring-engine';
 import { broadcast } from '../services/realtime';
-import { eq, and, desc } from 'drizzle-orm';
+import { sendNotification } from '../services/notification-service';
+import { eq, and, desc, sql } from 'drizzle-orm';
 import type { DeliveryInput, MilestoneEvent } from '@cricket/shared';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { validateBody, recordDeliverySchema } from '../middleware/validation';
@@ -127,6 +130,107 @@ async function detectAndBroadcastMilestones(
   // Broadcast each detected milestone
   for (const milestone of milestones) {
     broadcast.milestone(matchId, milestone);
+  }
+}
+
+/**
+ * Queue push notifications for scoring events to followers of the teams in this match.
+ * Checks for wickets, milestones, and match completion.
+ */
+async function queueScoringNotifications(
+  matchId: string,
+  deliveryRecord: typeof delivery.$inferSelect,
+  postInningsScore: number,
+  preInningsScore: number,
+  matchCompleted: boolean,
+): Promise<void> {
+  const del = deliveryRecord;
+
+  // Get the match record
+  const matchRecord = await db.query.match.findFirst({ where: eq(match.id, matchId) });
+  if (!matchRecord) return;
+
+  // Get teams in this match with names
+  const matchTeams = await db
+    .select({ teamId: matchTeam.teamId, teamName: team.name })
+    .from(matchTeam)
+    .innerJoin(team, eq(matchTeam.teamId, team.id))
+    .where(eq(matchTeam.matchId, matchId));
+  const teamNames = matchTeams.map((t) => t.teamName).join(' vs ');
+
+  // Get all users who follow any team in this match
+  const teamIds = matchTeams.map((t) => t.teamId);
+  if (teamIds.length === 0) return;
+
+  const followers = await db
+    .select({ userId: teamFollow.userId })
+    .from(teamFollow)
+    .where(
+      teamIds.length === 1
+        ? eq(teamFollow.teamId, teamIds[0])
+        : sql`${teamFollow.teamId} IN (${sql.join(teamIds.map((id) => sql`${id}`), sql`, `)})`,
+    );
+
+  if (followers.length === 0) return;
+
+  // Deduplicate follower IDs
+  const followerIds = [...new Set(followers.map((f) => f.userId))];
+
+  // Wicket notification
+  if (del.isWicket) {
+    const dismissedName = del.dismissedId ? await getPlayerName(del.dismissedId) : 'batsman';
+    const bowlerName = await getPlayerName(del.bowlerId);
+    for (const fId of followerIds) {
+      sendNotification(
+        fId,
+        'wicket',
+        `Wicket! ${dismissedName} out`,
+        `${bowlerName} gets ${dismissedName}. ${teamNames} — ${postInningsScore}/${del.inningsWickets}`,
+        { matchId, type: 'wicket' },
+      );
+    }
+  }
+
+  // Milestone notifications (50, 100, etc.)
+  if (del.runsBatsman > 0) {
+    const batCard = await db.query.battingScorecard.findFirst({
+      where: and(
+        eq(battingScorecard.inningsId, del.inningsId),
+        eq(battingScorecard.playerId, del.strikerId),
+      ),
+    });
+    if (batCard) {
+      const postRuns = batCard.runsScored;
+      const preRuns = postRuns - del.runsBatsman;
+      for (const threshold of BATSMAN_THRESHOLDS) {
+        if (preRuns < threshold.runs && postRuns >= threshold.runs) {
+          const name = await getPlayerName(del.strikerId);
+          for (const fId of followerIds) {
+            sendNotification(
+              fId,
+              'milestone',
+              `${threshold.label}! ${name}`,
+              `${name} reaches ${threshold.label} (${postRuns} runs) — ${teamNames}`,
+              { matchId, type: 'milestone', milestoneType: threshold.type },
+            );
+          }
+          break;
+        }
+      }
+    }
+  }
+
+  // Match completion notification
+  if (matchCompleted) {
+    for (const fId of followerIds) {
+      sendNotification(
+        fId,
+        'match_complete',
+        'Match Completed',
+        `${teamNames} — match has ended. ${matchRecord.resultSummary || 'Check scorecard for results.'}`,
+        { matchId, type: 'match_complete' },
+      );
+    }
   }
 }
 
@@ -364,6 +468,17 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
     ).catch((err) => {
       // Non-blocking — milestone detection failure should never break scoring
       console.error('Milestone detection error:', err);
+    });
+
+    // Queue push notifications for subscribed followers — non-blocking
+    queueScoringNotifications(
+      req.params.id,
+      result.delivery,
+      result.scorecardSnapshot.innings_score,
+      preDeliveryInningsScore,
+      result.matchCompleted,
+    ).catch((err) => {
+      console.error('Notification queueing error:', err);
     });
 
     // Update Redis caches — non-blocking, failures are silent

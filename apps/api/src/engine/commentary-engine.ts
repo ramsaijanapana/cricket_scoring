@@ -1,12 +1,26 @@
 import { db, type TxOrDb } from '../db/index';
 import { commentary } from '../db/schema/index';
+import { templates as enTemplates } from './commentary-templates/en';
+import { templates as hiTemplates } from './commentary-templates/hi';
+import type { CommentaryCategory, CommentaryTemplate } from './commentary-templates/en';
 
 /**
  * Commentary Engine — context.md section 7.2
  *
- * Pipeline: Delivery Event → Context Builder → Template Selector → NLG Engine
- *           → Milestone Detector → Commentary Record → WebSocket Broadcast
+ * Pipeline: Delivery Event -> Context Builder -> Template Selector -> NLG Engine
+ *           -> Milestone Detector -> Commentary Record -> WebSocket Broadcast
+ *
+ * Supports multi-language templates via `language` parameter (default: 'en').
  */
+
+const TEMPLATE_REGISTRY: Record<string, Record<CommentaryCategory, CommentaryTemplate[]>> = {
+  en: enTemplates,
+  hi: hiTemplates,
+};
+
+function getTemplates(language: string): Record<CommentaryCategory, CommentaryTemplate[]> {
+  return TEMPLATE_REGISTRY[language] || TEMPLATE_REGISTRY['en'];
+}
 
 interface CommentaryContext {
   delivery: any;
@@ -22,16 +36,17 @@ export class CommentaryEngine {
   /**
    * Generate commentary for a delivery event.
    * Returns the created commentary record.
+   * @param language - ISO 639-1 language code (default: 'en')
    */
-  async generate(ctx: CommentaryContext, tx: TxOrDb = db) {
+  async generate(ctx: CommentaryContext, tx: TxOrDb = db, language: string = 'en') {
     // 1. Context Builder — enrich with match state
     const enrichedContext = this.buildContext(ctx);
 
     // 2. Template Selector — pick template category
     const category = this.selectCategory(ctx.delivery);
 
-    // 3. NLG Engine — generate text
-    const { text, textShort, emojiText } = this.generateText(category, enrichedContext);
+    // 3. NLG Engine — generate text using language-specific templates
+    const { text, textShort, emojiText } = this.generateText(category, enrichedContext, language);
 
     // 4. Milestone Detector — check for milestones
     const milestone = this.detectMilestone(ctx);
@@ -47,7 +62,7 @@ export class CommentaryEngine {
       textShort,
       emojiText,
       mode: 'auto',
-      language: 'en',
+      language,
       milestone,
       dramaLevel,
     }).returning();
@@ -55,7 +70,7 @@ export class CommentaryEngine {
     return record;
   }
 
-  // ─── Pipeline Stages ─────────────────────────────────────────────────────
+  // --- Pipeline Stages ---
 
   private buildContext(ctx: CommentaryContext) {
     return {
@@ -79,8 +94,10 @@ export class CommentaryEngine {
   private generateText(
     category: CommentaryCategory,
     ctx: any,
+    language: string = 'en',
   ): { text: string; textShort: string; emojiText: string | null } {
-    const templates = TEMPLATES[category];
+    const langTemplates = getTemplates(language);
+    const templates = langTemplates[category];
     const template = templates[Math.floor(Math.random() * templates.length)];
 
     const text = this.interpolate(template.full, ctx);
@@ -126,48 +143,3 @@ export class CommentaryEngine {
       .replace('{run_rate}', (ctx.runRate || 0).toFixed(2));
   }
 }
-
-type CommentaryCategory = 'dot' | 'runs' | 'four' | 'six' | 'wicket' | 'wide' | 'noball' | 'extras';
-
-/**
- * Template bank — context.md section 7.2 categories.
- * Each template has full text, short ticker text, and optional emoji version.
- */
-const TEMPLATES: Record<CommentaryCategory, Array<{ full: string; short: string; emoji?: string }>> = {
-  dot: [
-    { full: '{over_ball} — Dot ball. Well bowled, the batsman is beaten.', short: 'Dot ball', emoji: '⚫' },
-    { full: '{over_ball} — Defended solidly back to the bowler.', short: 'Defended', emoji: '🛡️' },
-    { full: '{over_ball} — No run. Good length delivery, left alone.', short: 'No run' },
-  ],
-  runs: [
-    { full: '{over_ball} — {runs} run(s) taken. Score: {total}/{wickets}.', short: '{runs} run(s)', emoji: '🏃' },
-    { full: '{over_ball} — Pushed into the gap for {runs}. {total}/{wickets}.', short: '{runs} runs' },
-  ],
-  four: [
-    { full: '{over_ball} — FOUR! Brilliant shot races to the boundary. {total}/{wickets}.', short: 'FOUR!', emoji: '4️⃣🔥' },
-    { full: '{over_ball} — FOUR! Cracked through the covers, no stopping that.', short: 'FOUR! Through covers', emoji: '4️⃣💥' },
-    { full: '{over_ball} — FOUR! Driven elegantly past the fielder.', short: 'FOUR! Elegant drive', emoji: '4️⃣✨' },
-  ],
-  six: [
-    { full: '{over_ball} — SIX! Massive hit, that has gone all the way! {total}/{wickets}.', short: 'SIX!', emoji: '6️⃣🚀' },
-    { full: '{over_ball} — SIX! Into the stands! What a shot!', short: 'SIX! Into the stands', emoji: '6️⃣💫' },
-    { full: '{over_ball} — SIX! Launched over long-on, enormous hit!', short: 'SIX! Over long-on', emoji: '6️⃣🏏' },
-  ],
-  wicket: [
-    { full: '{over_ball} — OUT! Wicket falls! {total}/{wickets}.', short: 'OUT!', emoji: '❌🏏' },
-    { full: '{over_ball} — WICKET! A crucial breakthrough! {total}/{wickets}.', short: 'WICKET! Breakthrough', emoji: '🎯❌' },
-    { full: '{over_ball} — Gone! That is the end of the partnership. {total}/{wickets}.', short: 'WICKET! Partnership broken', emoji: '💔❌' },
-  ],
-  wide: [
-    { full: '{over_ball} — Wide ball. Extra run conceded.', short: 'Wide', emoji: '↔️' },
-    { full: '{over_ball} — Called wide. Straying down the leg side.', short: 'Wide ball' },
-  ],
-  noball: [
-    { full: '{over_ball} — No ball! Overstepped the crease. Free hit coming up.', short: 'No ball! Free hit', emoji: '🚫🦶' },
-    { full: '{over_ball} — No ball called. Front foot violation.', short: 'No ball' },
-  ],
-  extras: [
-    { full: '{over_ball} — {runs} byes. Went past the keeper.', short: '{runs} byes', emoji: '👋' },
-    { full: '{over_ball} — {runs} leg byes. Off the pads.', short: '{runs} leg byes' },
-  ],
-};

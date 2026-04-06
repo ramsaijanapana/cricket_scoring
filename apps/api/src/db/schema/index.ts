@@ -21,3 +21,6 @@ export { achievement, userAchievement } from './achievement';
 export { fantasyContest, fantasyTeam, fantasyPointsLog } from './fantasy';
 export { trendingSnapshot } from './trending';
 export { auditLog } from './audit-log';
+export { deviceToken } from './device-token';
+export { notificationPreference } from './notification-preference';
+export { reaction } from './reaction';

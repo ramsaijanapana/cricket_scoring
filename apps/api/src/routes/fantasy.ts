@@ -3,6 +3,8 @@ import { db } from '../db/index';
 import { fantasyContest, fantasyTeam, fantasyPointsLog } from '../db/schema/fantasy';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { requireAuth, getUserId } from '../middleware/auth';
+import { scoreContest } from '../engine/fantasy-scoring';
+import { appUser } from '../db/schema/user';
 
 function parsePagination(query: any): { page: number; limit: number; offset: number } {
   const page = Math.max(1, parseInt(query.page as string, 10) || 1);
@@ -195,6 +197,57 @@ export const fantasyRoutes: FastifyPluginAsync = async (app) => {
 
     return { data: rows, page: Math.floor(offset / limit) + 1, limit };
   });
+
+  // GET /contests/:id/leaderboard — dedicated leaderboard endpoint
+  app.get<{ Params: { id: string }; Querystring: { page?: string; limit?: string } }>(
+    '/contests/:id/leaderboard',
+    async (req, reply) => {
+      const contest = await db.query.fantasyContest.findFirst({
+        where: eq(fantasyContest.id, req.params.id),
+      });
+      if (!contest) return reply.status(404).send({ error: 'Contest not found' });
+
+      const { limit, offset } = parsePagination(req.query);
+
+      const rows = await db
+        .select({
+          teamId: fantasyTeam.id,
+          userId: fantasyTeam.userId,
+          teamName: fantasyTeam.teamName,
+          totalPoints: fantasyTeam.totalPoints,
+          rank: fantasyTeam.rank,
+          displayName: appUser.displayName,
+        })
+        .from(fantasyTeam)
+        .leftJoin(appUser, eq(fantasyTeam.userId, appUser.id))
+        .where(eq(fantasyTeam.contestId, req.params.id))
+        .orderBy(desc(fantasyTeam.totalPoints))
+        .limit(limit)
+        .offset(offset);
+
+      return {
+        contest: { id: contest.id, name: contest.name, status: contest.status },
+        leaderboard: rows,
+        page: Math.floor(offset / limit) + 1,
+        limit,
+      };
+    },
+  );
+
+  // POST /contests/:id/score — trigger scoring for a contest
+  app.post<{ Params: { id: string } }>(
+    '/contests/:id/score',
+    { preHandler: [requireAuth] },
+    async (req, reply) => {
+      const contest = await db.query.fantasyContest.findFirst({
+        where: eq(fantasyContest.id, req.params.id),
+      });
+      if (!contest) return reply.status(404).send({ error: 'Contest not found' });
+
+      await scoreContest(req.params.id);
+      return { success: true };
+    },
+  );
 
   // GET /history — completed contests for user
   app.get<{ Querystring: { page?: string; limit?: string } }>('/history', async (req, reply) => {

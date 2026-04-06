@@ -10,6 +10,8 @@ const CreateMatchPage = lazy(() => import('./pages/CreateMatchPage').then(m => (
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage').then(m => ({ default: m.AnalyticsPage })));
 const TournamentPage = lazy(() => import('./pages/TournamentPage').then(m => ({ default: m.TournamentPage })));
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
+const FeedPage = lazy(() => import('./pages/FeedPage').then(m => ({ default: m.FeedPage })));
+const FantasyPage = lazy(() => import('./pages/FantasyPage').then(m => ({ default: m.FantasyPage })));
 
 function LoadingSpinner() {
   return (
@@ -77,6 +79,8 @@ export function App() {
           <Route path="/matches/:id/analytics" element={<AnimatedPage><AnalyticsPage /></AnimatedPage>} />
           <Route path="/tournaments" element={<AnimatedPage><TournamentPage /></AnimatedPage>} />
           <Route path="/tournaments/:id" element={<AnimatedPage><TournamentPage /></AnimatedPage>} />
+          <Route path="/feed" element={<AnimatedPage><FeedPage /></AnimatedPage>} />
+          <Route path="/fantasy" element={<AnimatedPage><FantasyPage /></AnimatedPage>} />
           <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
         </Route>
       </Routes>

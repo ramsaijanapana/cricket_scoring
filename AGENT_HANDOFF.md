@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-04-05T23:56:51.124Z
+- Updated: 2026-04-06T00:18:06.723Z
 - Branch: main
-- Head: 512076b
+- Head: 029bc4a
 - Focus: npm command troubleshooting
 
 ## Latest Summary
 
-- Sprint 3-6: Toss wizard, commentary feed, sync badge, analytics charts, Sentry, Docker prod, tournaments, GDPR, PDF export
+- All 60 enhancements implemented across 8 sprints
 
 ## Next Steps
 
-- Sprint 7-8: Push notifications, social features, mobile, P2/P3 polish
+- Production deployment, end-to-end testing, mobile app completion
 
 ## Risks / Watchouts
 
@@ -32,31 +32,37 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 34
+- Changed files: 33
 - Staged files: 0
 - claude/worktrees/agent-a6aaeee9
-- apps/api/package.json
-- apps/api/src/routes/matches.ts
-- apps/api/src/routes/users.ts
+- apps/api/src/db/schema/index.ts
+- apps/api/src/engine/commentary-engine.ts
+- apps/api/src/routes/deliveries.ts
+- apps/api/src/routes/fantasy.ts
+- apps/api/src/routes/notifications.ts
+- apps/api/src/routes/players.ts
 - apps/api/src/server.ts
-- apps/web/package.json
+- apps/api/src/workers/notification-worker.ts
 - apps/web/src/App.tsx
 - apps/web/src/components/Layout.tsx
 - apps/web/src/lib/api.ts
-- apps/web/src/main.tsx
 - apps/web/src/pages/ScorecardPage.tsx
 - apps/web/src/pages/ScoringPage.tsx
-- apps/web/src/styles/globals.css
-- docker-compose.yml
-- package-lock.json
-- apps/api/src/middleware/metrics.ts
-- apps/api/src/middleware/request-logger.ts
-- apps/api/src/routes/tournaments.ts
-- apps/api/src/services/sentry.ts
-- apps/web/src/components/CommentaryEditor.tsx
-- +14 more changed files
+- apps/web/src/pages/SettingsPage.tsx
+- apps/api/src/db/schema/device-token.ts
+- apps/api/src/db/schema/notification-preference.ts
+- apps/api/src/db/schema/reaction.ts
+- apps/api/src/engine/commentary-templates/en.ts
+- apps/api/src/engine/commentary-templates/hi.ts
+- +13 more changed files
 
 ## Recent Checkpoints
+
+### 2026-04-06T00:18:06.723Z — npm command troubleshooting
+
+- Actor: ramsa
+- Summary: All 60 enhancements implemented across 8 sprints
+- Next: Production deployment, end-to-end testing, mobile app completion
 
 ### 2026-04-05T23:56:51.124Z — npm command troubleshooting
 
@@ -81,12 +87,6 @@
 - Actor: ramsa
 - Summary: Added milestone detection, win predictions, Redis caching, completion UI, partnership broadcast
 - Next: Enhancement backlog — see ENHANCEMENTS.md
-
-### 2026-04-05T23:09:10.230Z — npm command troubleshooting
-
-- Actor: ramsa
-- Summary: Fixed run-out dismissal selection, innings completion guard, over broadcast stats, dead ball validation
-- Next: DLS calculation logic, milestone detection, prediction broadcast
 
 ## Workflow Rule
 

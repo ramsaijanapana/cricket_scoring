@@ -373,6 +373,107 @@ export const api = {
   revokeScorer: (matchId: string, userId: string) =>
     request<void>(`/matches/${matchId}/scorers/${userId}`, { method: 'DELETE' }),
 
+  // Notifications
+  getNotifications: (page = 1) =>
+    request<{ data: any[]; page: number; limit: number }>(`/notifications?page=${page}`),
+  getUnreadNotificationCount: () =>
+    request<{ count: number }>('/notifications/unread-count'),
+  markNotificationRead: (id: string) =>
+    request<any>(`/notifications/${id}/read`, { method: 'PATCH' }),
+  markAllNotificationsRead: () =>
+    request<{ success: boolean }>('/notifications/read-all', { method: 'POST' }),
+  registerDeviceToken: (token: string, platform = 'web') =>
+    request<{ success: boolean }>('/notifications/register-device', {
+      method: 'POST',
+      body: JSON.stringify({ token, platform }),
+    }),
+  getNotificationPreferences: () =>
+    request<any>('/notifications/preferences'),
+  setNotificationPreferences: (prefs: Record<string, boolean>) =>
+    request<any>('/notifications/preferences', {
+      method: 'POST',
+      body: JSON.stringify(prefs),
+    }),
+
+  // Social — follows & feed
+  followUser: (userId: string) =>
+    request<any>(`/users/${userId}/follow`, { method: 'POST' }),
+  unfollowUser: (userId: string) =>
+    request<void>(`/users/${userId}/follow`, { method: 'DELETE' }),
+  getFollowers: (userId: string, page = 1) =>
+    request<{ data: any[]; page: number; limit: number }>(`/users/${userId}/followers?page=${page}`),
+  getFollowing: (userId: string, page = 1) =>
+    request<{ data: any[]; page: number; limit: number }>(`/users/${userId}/following?page=${page}`),
+  getFeed: (page = 1) =>
+    request<{ data: any[]; page: number; limit: number }>(`/users/feed?page=${page}`),
+
+  // Chat
+  getChatRooms: (page = 1) =>
+    request<{ data: any[]; page: number; limit: number }>(`/chat/rooms?page=${page}`),
+  getChatMessages: (roomId: string, page = 1) =>
+    request<{ data: any[]; page: number; limit: number }>(`/chat/rooms/${roomId}/messages?page=${page}`),
+  sendChatMessage: (roomId: string, content: string, replyToId?: string) =>
+    request<any>(`/chat/rooms/${roomId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ content, replyToId }),
+    }),
+  getOrCreateDMRoom: (userId: string) =>
+    request<any>(`/chat/direct/${userId}`),
+  getOrCreateMatchRoom: (matchId: string) =>
+    request<any>('/chat/rooms', {
+      method: 'POST',
+      body: JSON.stringify({ type: 'match', matchId }),
+    }),
+
+  // Fantasy Cricket
+  getFantasyContests: (status?: string) =>
+    request<{ data: any[]; page: number; limit: number }>(`/fantasy/contests${status ? `?status=${status}` : ''}`),
+  getMyFantasyContests: (page = 1) =>
+    request<{ data: any[]; page: number; limit: number }>(`/fantasy/my-contests?page=${page}`),
+  getFantasyLeaderboard: (contestId: string) =>
+    request<{ contest: any; leaderboard: any[] }>(`/fantasy/contests/${contestId}/leaderboard`),
+  submitFantasyTeam: (contestId: string, data: { teamName?: string; players: string[] }) =>
+    request<any>(`/fantasy/contests/${contestId}/team`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+
+  // Audit Log
+  getAuditLog: (matchId: string, page = 1) =>
+    request<{ data: any[]; page: number; limit: number }>(`/matches/${matchId}/audit-log?page=${page}`),
+
+  // Emoji Reactions
+  submitReaction: (matchId: string, data: { deliveryId: string; emoji: string }) =>
+    request<any>(`/matches/${matchId}/reactions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  getReactions: (matchId: string, deliveryId?: string) =>
+    request<{ data: any[] }>(`/matches/${matchId}/reactions${deliveryId ? `?deliveryId=${deliveryId}` : ''}`),
+
+  // Player Form
+  getPlayerForm: (playerId: string) =>
+    request<{
+      playerId: string;
+      innings: number;
+      average: number;
+      strikeRate: number;
+      trend: 'up' | 'down' | 'stable';
+      dataPoints: number[];
+    }>(`/players/${playerId}/form`),
+
+  // Venue Statistics
+  getVenueStats: (venue: string) =>
+    request<{
+      venue: string;
+      matchesPlayed: number;
+      avgFirstInningsScore: number;
+      avgSecondInningsScore: number;
+      highestTotal: number | null;
+      lowestTotal: number | null;
+      tossBatFirstWinPct: number | null;
+    }>(`/venues/${encodeURIComponent(venue)}/stats`),
+
   // GDPR / Settings
   exportUserData: () =>
     request<UserExportData>('/users/me/export'),

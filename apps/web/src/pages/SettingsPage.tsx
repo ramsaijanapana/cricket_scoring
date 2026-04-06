@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ArrowLeft,
@@ -8,6 +8,7 @@ import {
   Trash2,
   AlertTriangle,
   Shield,
+  Bell,
   X,
   CheckCircle,
 } from 'lucide-react';
@@ -59,6 +60,20 @@ export function SettingsPage() {
       >
         Settings
       </motion.h1>
+
+      {/* Notification Preferences section */}
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.05 }}
+        className="card gradient-strip-top mb-6"
+      >
+        <div className="flex items-center gap-2 mb-5">
+          <Bell size={18} className="text-cricket-green" />
+          <h2 className="text-lg font-bold text-theme-primary">Notification Preferences</h2>
+        </div>
+        <NotificationPreferences />
+      </motion.div>
 
       {/* Privacy & Data section */}
       <motion.div
@@ -278,5 +293,101 @@ function DeleteAccountModal({ onClose }: { onClose: () => void }) {
         )}
       </motion.div>
     </motion.div>
+  );
+}
+
+// --- Notification Preferences ---
+
+const PREF_TOGGLES = [
+  { key: 'wickets', label: 'Wicket Alerts', description: 'Get notified when a wicket falls in followed matches' },
+  { key: 'milestones', label: 'Milestone Alerts', description: 'Notifications for 50s, 100s, 5-wicket hauls' },
+  { key: 'matchCompletion', label: 'Match Completion', description: 'Alert when a match you follow ends' },
+  { key: 'followActivity', label: 'Followed User Activity', description: 'Updates when users you follow score or play' },
+] as const;
+
+function NotificationPreferences() {
+  const queryClient = useQueryClient();
+  const [localPrefs, setLocalPrefs] = useState<Record<string, boolean>>({
+    wickets: true,
+    milestones: true,
+    matchCompletion: true,
+    followActivity: true,
+  });
+  const [saved, setSaved] = useState(false);
+
+  const { data: serverPrefs } = useQuery({
+    queryKey: ['notification-prefs'],
+    queryFn: () => api.getNotificationPreferences(),
+  });
+
+  useEffect(() => {
+    if (serverPrefs) {
+      setLocalPrefs({
+        wickets: serverPrefs.wickets ?? true,
+        milestones: serverPrefs.milestones ?? true,
+        matchCompletion: serverPrefs.matchCompletion ?? true,
+        followActivity: serverPrefs.followActivity ?? true,
+      });
+    }
+  }, [serverPrefs]);
+
+  const saveMutation = useMutation({
+    mutationFn: (prefs: Record<string, boolean>) => api.setNotificationPreferences(prefs),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['notification-prefs'] });
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    },
+  });
+
+  const toggle = (key: string) => {
+    const updated = { ...localPrefs, [key]: !localPrefs[key] };
+    setLocalPrefs(updated);
+    saveMutation.mutate(updated);
+  };
+
+  return (
+    <div className="space-y-3">
+      {PREF_TOGGLES.map(({ key, label, description }) => (
+        <div key={key} className="flex items-center justify-between p-3 rounded-xl" style={{ background: 'var(--bg-hover)' }}>
+          <div className="flex-1 mr-4">
+            <p className="text-sm font-semibold text-theme-primary">{label}</p>
+            <p className="text-xs text-theme-tertiary mt-0.5">{description}</p>
+          </div>
+          <button
+            onClick={() => toggle(key)}
+            className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+              localPrefs[key] ? 'bg-cricket-green' : 'bg-gray-400/30'
+            }`}
+            role="switch"
+            aria-checked={localPrefs[key]}
+          >
+            <motion.div
+              className="absolute top-0.5 w-5 h-5 rounded-full bg-white shadow-sm"
+              animate={{ left: localPrefs[key] ? '22px' : '2px' }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            />
+          </button>
+        </div>
+      ))}
+
+      <AnimatePresence>
+        {saved && (
+          <motion.div
+            initial={{ opacity: 0, y: -5 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            className="flex items-center gap-2 text-cricket-green text-sm font-medium pt-1"
+          >
+            <CheckCircle size={16} />
+            Preferences saved
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {saveMutation.isError && (
+        <p className="text-cricket-red text-xs">Failed to save preferences</p>
+      )}
+    </div>
   );
 }
