@@ -3,6 +3,7 @@ import { db } from '../db/index';
 import { innings, match, matchTeam, matchFormatConfig, delivery } from '../db/schema/index';
 import { battingScorecard, bowlingScorecard, fieldingScorecard } from '../db/schema/scorecard';
 import { eq, and, desc } from 'drizzle-orm';
+import { requireAuth } from '../middleware/auth';
 
 export const inningsRoutes: FastifyPluginAsync = async (app) => {
   // Create new innings (for 2nd innings, super over, etc.)
@@ -15,7 +16,7 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
       isSuperOver?: boolean;
       targetScore?: number;
     };
-  }>('/:id/innings', async (req, reply) => {
+  }>('/:id/innings', { preHandler: [requireAuth] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -69,6 +70,7 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
   // Declare innings
   app.post<{ Params: { id: string; inningsId: string } }>(
     '/:id/innings/:inningsId/declare',
+    { preHandler: [requireAuth] },
     async (req, reply) => {
       const [updated] = await db.update(innings).set({
         declared: true,
@@ -85,7 +87,7 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
   app.post<{
     Params: { id: string; inningsId: string };
     Body: { bowlerId: string };
-  }>('/:id/innings/:inningsId/bowler', async (req, reply) => {
+  }>('/:id/innings/:inningsId/bowler', { preHandler: [requireAuth] }, async (req, reply) => {
     const existing = await db.query.bowlingScorecard.findFirst({
       where: (bs, { and, eq: e }) => and(
         e(bs.inningsId, req.params.inningsId),
@@ -118,7 +120,7 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
   app.post<{
     Params: { id: string; inningsId: string };
     Body: { playerId: string; isRetiredHurtReturn?: boolean };
-  }>('/:id/innings/:inningsId/new-batsman', async (req, reply) => {
+  }>('/:id/innings/:inningsId/new-batsman', { preHandler: [requireAuth] }, async (req, reply) => {
     // Check if the player already has a batting scorecard entry with didNotBat: false
     const existingEntry = await db.query.battingScorecard.findFirst({
       where: and(
@@ -191,7 +193,7 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
       dayNumber?: number;
       sessionNumber?: number;
     };
-  }>('/:id/session/break', async (req, reply) => {
+  }>('/:id/session/break', { preHandler: [requireAuth] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -246,7 +248,7 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
       dayNumber?: number;
       sessionNumber?: number;
     };
-  }>('/:id/session/resume', async (req, reply) => {
+  }>('/:id/session/resume', { preHandler: [requireAuth] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -304,7 +306,7 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
   // Enforce follow-on — context.md section 5.10
   app.post<{
     Params: { id: string; inningsId: string };
-  }>('/:id/innings/:inningsId/follow-on', async (req, reply) => {
+  }>('/:id/innings/:inningsId/follow-on', { preHandler: [requireAuth] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });

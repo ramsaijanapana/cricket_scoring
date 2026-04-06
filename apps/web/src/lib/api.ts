@@ -438,6 +438,27 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
+  // Leaderboards / Records
+  getRecordsBatting: (params?: Record<string, string>) =>
+    request<{ data: any[]; page: number; limit: number }>(
+      `/leaderboards/batting?${new URLSearchParams({ limit: '10', ...params })}`,
+    ),
+  getRecordsBowling: (params?: Record<string, string>) =>
+    request<{ data: any[]; page: number; limit: number }>(
+      `/leaderboards/bowling?${new URLSearchParams({ limit: '10', ...params })}`,
+    ),
+
+  // Head-to-Head
+  getHeadToHead: (playerId: string, vsPlayerId: string) =>
+    request<{
+      balls: number;
+      runs: number;
+      dismissals: number;
+      dotBallPct: number;
+      boundaryPct: number;
+      avgRunsPerBall: number;
+    }>(`/analytics/players/${playerId}/head-to-head?vs_player_id=${vsPlayerId}`),
+
   // Audit Log
   getAuditLog: (matchId: string, page = 1) =>
     request<{ data: any[]; page: number; limit: number }>(`/matches/${matchId}/audit-log?page=${page}`),

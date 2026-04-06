@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import { serializeApmMetrics } from './apm';
 
 // ── In-memory metric storage ────────────────────────────────────────────────
 
@@ -162,6 +163,8 @@ export async function registerMetrics(app: FastifyInstance): Promise<void> {
   // Expose /metrics endpoint (Prometheus scrape target)
   app.get('/metrics', async (_request, reply) => {
     reply.header('content-type', 'text/plain; version=0.0.4; charset=utf-8');
-    return reply.send(serializeMetrics());
+    const baseMetrics = serializeMetrics();
+    const apmMetrics = serializeApmMetrics();
+    return reply.send(baseMetrics + apmMetrics);
   });
 }

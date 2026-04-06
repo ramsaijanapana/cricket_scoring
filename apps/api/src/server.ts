@@ -37,13 +37,17 @@ import { tournamentRoutes } from './routes/tournaments';
 import { auditLogRoutes } from './routes/audit-log';
 import { reactionRoutes } from './routes/reactions';
 import { venueRoutes } from './routes/venues';
+import { careerStatsRoutes } from './routes/career-stats';
+import { broadcasterRoutes } from './routes/broadcaster';
 import { startWorkers } from './workers/index';
 import { env } from './config';
 import { validateEnvironment } from './middleware/env-check';
 import { initSentry, registerSentryErrorHandler, flushSentry } from './services/sentry';
 import { registerMetrics } from './middleware/metrics';
+import { registerApm } from './middleware/apm';
 import { registerRequestLogger } from './middleware/request-logger';
 import { getRedisClient } from './services/cache';
+import { attachPresenceTracking, getPresenceCount } from './services/presence';
 
 // Initialize Sentry before anything else so startup errors are captured
 initSentry();
@@ -95,6 +99,7 @@ async function buildApp() {
 
   // ─── Observability middleware ─────────────────────────────────────────────
   await registerMetrics(app);
+  await registerApm(app);
   await registerRequestLogger(app);
 
   await app.register(cors, {
@@ -211,7 +216,7 @@ async function buildApp() {
   // Skip auth for health check and auth endpoints; allow unauthenticated in dev mode
   app.addHook('onRequest', async (request, reply) => {
     const url = request.url;
-    if (url === '/health' || url === '/metrics' || url.startsWith('/api/v1/auth') || url.startsWith('/docs')) return;
+    if (url === '/health' || url === '/metrics' || url.startsWith('/apm/') || url.startsWith('/api/v1/auth') || url.startsWith('/api/v1/broadcaster') || url.startsWith('/docs')) return;
 
     const authHeader = request.headers.authorization;
     if (!authHeader) return; // Allow unauthenticated access (dev mode)
@@ -288,8 +293,22 @@ async function buildApp() {
   // Venue Statistics (P3)
   app.register(venueRoutes, { prefix: '/api/v1/venues' });
 
+  // Career Stats (P3)
+  app.register(careerStatsRoutes, { prefix: '/api/v1/players' });
+
+  // Broadcaster API (P3) — public API for TV overlays
+  app.register(broadcasterRoutes, { prefix: '/api/v1/broadcaster' });
+
+  // Spectator Presence — REST endpoint
+  app.get<{ Params: { id: string } }>('/api/v1/matches/:id/presence', async (req) => {
+    return { count: getPresenceCount(req.params.id) };
+  });
+
   // Attach Socket.IO to the shared HTTP server
-  await initSocketIO(httpServer);
+  const io = await initSocketIO(httpServer);
+
+  // Attach presence tracking to Socket.IO
+  attachPresenceTracking(io);
 
   // Start trending BullMQ repeatable job
   await startTrendingSchedule();

@@ -3,6 +3,7 @@ import { db } from '../db/index';
 import { player, playerTeamMembership, battingScorecard, innings } from '../db/schema/index';
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { parsePagination, paginatedResponse } from '../middleware/pagination';
+import { requireAuth } from '../middleware/auth';
 
 export const playerRoutes: FastifyPluginAsync = async (app) => {
   // List all players
@@ -35,7 +36,7 @@ export const playerRoutes: FastifyPluginAsync = async (app) => {
       bowlingStyle?: string;
       primaryRole?: string;
     };
-  }>('/', async (req, reply) => {
+  }>('/', { preHandler: [requireAuth] }, async (req, reply) => {
     const [newPlayer] = await db.insert(player).values({
       firstName: req.body.firstName,
       lastName: req.body.lastName,
@@ -57,7 +58,7 @@ export const playerRoutes: FastifyPluginAsync = async (app) => {
       bowlingStyle: string;
       primaryRole: string;
     }>;
-  }>('/:id', async (req, reply) => {
+  }>('/:id', { preHandler: [requireAuth] }, async (req, reply) => {
     const [updated] = await db.update(player).set({
       ...req.body,
       updatedAt: new Date(),
@@ -70,7 +71,7 @@ export const playerRoutes: FastifyPluginAsync = async (app) => {
   app.post<{
     Params: { id: string };
     Body: { teamId: string; jerseyNumber?: number; roleInTeam?: string; joinedAt: string };
-  }>('/:id/teams', async (req, reply) => {
+  }>('/:id/teams', { preHandler: [requireAuth] }, async (req, reply) => {
     const [membership] = await db.insert(playerTeamMembership).values({
       playerId: req.params.id,
       teamId: req.body.teamId,

@@ -1,14 +1,14 @@
 {
   "project": "cricket_scoring",
-  "updatedAt": "2026-04-06T00:26:52.169Z",
+  "updatedAt": "2026-04-06T01:02:13.550Z",
   "branch": "main",
-  "head": "0a2a65a",
+  "head": "03f9826",
   "currentFocus": "npm command troubleshooting",
   "latestSummary": [
-    "Clean up stale worktree submodule"
+    "Implemented all remaining features"
   ],
   "nextSteps": [
-    "Production deployment"
+    "E2E testing"
   ],
   "risks": [
     "Interactive PowerShell may still fail on machines where npm.ps1 is blocked by execution policy even though npm works in non-interactive runners."
@@ -22,11 +22,170 @@
   ],
   "workingTree": {
     "changedFiles": [
-      ".claude/worktrees/agent-a6aaeee9"
+      "agent-context/state.json",
+      "apps/api/src/engine/markov-engine.ts",
+      "apps/api/src/engine/score-projection.ts",
+      "apps/api/src/middleware/apm.ts",
+      "apps/api/src/middleware/metrics.ts",
+      "apps/api/src/routes/broadcaster.ts",
+      "apps/api/src/routes/career-stats.ts",
+      "apps/api/src/routes/innings.ts",
+      "apps/api/src/routes/players.ts",
+      "apps/api/src/server.ts",
+      "apps/api/src/services/presence.ts",
+      "apps/mobile/app.json",
+      "apps/mobile/app/matches/[id]/score.tsx",
+      "apps/mobile/eas.json",
+      "apps/mobile/lib/haptics.ts",
+      "apps/mobile/lib/notifications.ts",
+      "apps/mobile/lib/offline-sync.ts",
+      "apps/mobile/lib/socket.ts",
+      "apps/mobile/package.json",
+      "apps/web/src/App.tsx",
+      "apps/web/src/components/FielderPositionSelector.tsx",
+      "apps/web/src/components/HeadToHeadCard.tsx",
+      "apps/web/src/components/MatchBreakScreen.tsx",
+      "apps/web/src/components/SpectatorBadge.tsx",
+      "apps/web/src/components/charts/HeadToHeadCard.tsx",
+      "apps/web/src/components/charts/LivePredictionChart.tsx",
+      "apps/web/src/components/charts/PartnershipChart.tsx",
+      "apps/web/src/components/charts/index.ts",
+      "apps/web/src/lib/api.ts",
+      "apps/web/src/pages/AnalyticsPage.tsx",
+      "apps/web/src/pages/OverByOverPage.tsx",
+      "apps/web/src/pages/RecordsPage.tsx"
     ],
-    "stagedFiles": []
+    "stagedFiles": [
+      "AGENT_HANDOFF.md",
+      "apps/api/src/engine/markov-engine.ts",
+      "apps/api/src/engine/score-projection.ts",
+      "apps/api/src/middleware/apm.ts",
+      "apps/api/src/middleware/metrics.ts",
+      "apps/api/src/routes/broadcaster.ts",
+      "apps/api/src/routes/career-stats.ts",
+      "apps/api/src/routes/innings.ts",
+      "apps/api/src/routes/players.ts",
+      "apps/api/src/server.ts",
+      "apps/api/src/services/presence.ts",
+      "apps/mobile/app.json",
+      "apps/mobile/app/matches/[id]/score.tsx",
+      "apps/mobile/eas.json",
+      "apps/mobile/lib/haptics.ts",
+      "apps/mobile/lib/notifications.ts",
+      "apps/mobile/lib/offline-sync.ts",
+      "apps/mobile/lib/socket.ts",
+      "apps/mobile/package.json",
+      "apps/web/src/App.tsx",
+      "apps/web/src/components/FielderPositionSelector.tsx",
+      "apps/web/src/components/HeadToHeadCard.tsx",
+      "apps/web/src/components/MatchBreakScreen.tsx",
+      "apps/web/src/components/SpectatorBadge.tsx",
+      "apps/web/src/components/charts/HeadToHeadCard.tsx",
+      "apps/web/src/components/charts/LivePredictionChart.tsx",
+      "apps/web/src/components/charts/PartnershipChart.tsx",
+      "apps/web/src/components/charts/index.ts",
+      "apps/web/src/lib/api.ts",
+      "apps/web/src/pages/AnalyticsPage.tsx",
+      "apps/web/src/pages/OverByOverPage.tsx",
+      "apps/web/src/pages/RecordsPage.tsx"
+    ]
   },
   "recentCheckpoints": [
+    {
+      "updatedAt": "2026-04-06T01:02:13.550Z",
+      "actor": "ramsa",
+      "focus": "npm command troubleshooting",
+      "summary": [
+        "Implemented all remaining features"
+      ],
+      "nextSteps": [
+        "E2E testing"
+      ],
+      "risks": [],
+      "decisions": [],
+      "verification": [],
+      "changedFiles": [
+        "agent-context/state.json",
+        "apps/api/src/engine/markov-engine.ts",
+        "apps/api/src/engine/score-projection.ts",
+        "apps/api/src/middleware/apm.ts",
+        "apps/api/src/middleware/metrics.ts",
+        "apps/api/src/routes/broadcaster.ts",
+        "apps/api/src/routes/career-stats.ts",
+        "apps/api/src/routes/innings.ts",
+        "apps/api/src/routes/players.ts",
+        "apps/api/src/server.ts",
+        "apps/api/src/services/presence.ts",
+        "apps/mobile/app.json",
+        "apps/mobile/app/matches/[id]/score.tsx",
+        "apps/mobile/eas.json",
+        "apps/mobile/lib/haptics.ts",
+        "apps/mobile/lib/notifications.ts",
+        "apps/mobile/lib/offline-sync.ts",
+        "apps/mobile/lib/socket.ts",
+        "apps/mobile/package.json",
+        "apps/web/src/App.tsx",
+        "apps/web/src/components/FielderPositionSelector.tsx",
+        "apps/web/src/components/HeadToHeadCard.tsx",
+        "apps/web/src/components/MatchBreakScreen.tsx",
+        "apps/web/src/components/SpectatorBadge.tsx",
+        "apps/web/src/components/charts/HeadToHeadCard.tsx",
+        "apps/web/src/components/charts/LivePredictionChart.tsx",
+        "apps/web/src/components/charts/PartnershipChart.tsx",
+        "apps/web/src/components/charts/index.ts",
+        "apps/web/src/lib/api.ts",
+        "apps/web/src/pages/AnalyticsPage.tsx",
+        "apps/web/src/pages/OverByOverPage.tsx",
+        "apps/web/src/pages/RecordsPage.tsx"
+      ]
+    },
+    {
+      "updatedAt": "2026-04-06T01:01:25.402Z",
+      "actor": "ramsa",
+      "focus": "npm command troubleshooting",
+      "summary": [
+        "Implemented all remaining stub features"
+      ],
+      "nextSteps": [
+        "E2E testing, production deployment"
+      ],
+      "risks": [],
+      "decisions": [],
+      "verification": [],
+      "changedFiles": [
+        "pps/api/src/middleware/metrics.ts",
+        "apps/api/src/routes/innings.ts",
+        "apps/api/src/routes/players.ts",
+        "apps/api/src/server.ts",
+        "apps/mobile/app.json",
+        "apps/mobile/app/matches/[id]/score.tsx",
+        "apps/mobile/package.json",
+        "apps/web/src/App.tsx",
+        "apps/web/src/components/charts/index.ts",
+        "apps/web/src/lib/api.ts",
+        "apps/web/src/pages/AnalyticsPage.tsx",
+        "apps/api/src/engine/markov-engine.ts",
+        "apps/api/src/engine/score-projection.ts",
+        "apps/api/src/middleware/apm.ts",
+        "apps/api/src/routes/broadcaster.ts",
+        "apps/api/src/routes/career-stats.ts",
+        "apps/api/src/services/presence.ts",
+        "apps/mobile/eas.json",
+        "apps/mobile/lib/haptics.ts",
+        "apps/mobile/lib/notifications.ts",
+        "apps/mobile/lib/offline-sync.ts",
+        "apps/mobile/lib/socket.ts",
+        "apps/web/src/components/FielderPositionSelector.tsx",
+        "apps/web/src/components/HeadToHeadCard.tsx",
+        "apps/web/src/components/MatchBreakScreen.tsx",
+        "apps/web/src/components/SpectatorBadge.tsx",
+        "apps/web/src/components/charts/HeadToHeadCard.tsx",
+        "apps/web/src/components/charts/LivePredictionChart.tsx",
+        "apps/web/src/components/charts/PartnershipChart.tsx",
+        "apps/web/src/pages/OverByOverPage.tsx",
+        "apps/web/src/pages/RecordsPage.tsx"
+      ]
+    },
     {
       "updatedAt": "2026-04-06T00:26:52.169Z",
       "actor": "ramsa",
@@ -236,50 +395,6 @@
       "changedFiles": [
         "claude/worktrees/agent-a6aaeee9",
         "ENHANCEMENTS.md"
-      ]
-    },
-    {
-      "updatedAt": "2026-04-05T23:23:56.729Z",
-      "actor": "ramsa",
-      "focus": "npm command troubleshooting",
-      "summary": [
-        "Added milestone detection, win predictions, Redis caching, completion UI, partnership broadcast"
-      ],
-      "nextSteps": [
-        "Enhancement backlog — see ENHANCEMENTS.md"
-      ],
-      "risks": [],
-      "decisions": [],
-      "verification": [],
-      "changedFiles": [
-        "claude/worktrees/agent-a6aaeee9",
-        "apps/api/src/engine/scoring-engine.ts",
-        "apps/api/src/routes/deliveries.ts",
-        "apps/api/src/routes/matches.ts",
-        "apps/api/src/routes/scorecard.ts",
-        "apps/web/src/pages/ScoringPage.tsx",
-        "packages/shared/src/types/events.ts",
-        "apps/api/src/services/cache.ts"
-      ]
-    },
-    {
-      "updatedAt": "2026-04-05T23:09:10.230Z",
-      "actor": "ramsa",
-      "focus": "npm command troubleshooting",
-      "summary": [
-        "Fixed run-out dismissal selection, innings completion guard, over broadcast stats, dead ball validation"
-      ],
-      "nextSteps": [
-        "DLS calculation logic, milestone detection, prediction broadcast"
-      ],
-      "risks": [],
-      "decisions": [],
-      "verification": [],
-      "changedFiles": [
-        "claude/worktrees/agent-a6aaeee9",
-        "apps/api/src/middleware/validation.ts",
-        "apps/api/src/routes/deliveries.ts",
-        "apps/web/src/pages/ScoringPage.tsx"
       ]
     }
   ]

@@ -2,12 +2,14 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BarChart3, Activity, Target, CircleDot } from 'lucide-react';
+import { ArrowLeft, BarChart3, Activity, Target, CircleDot, Link2, Swords } from 'lucide-react';
 import { api } from '../lib/api';
 import { WormChart } from '../components/charts/WormChart';
 import { ManhattanChart } from '../components/charts/ManhattanChart';
 import { WagonWheel } from '../components/charts/WagonWheel';
 import { PitchMap } from '../components/charts/PitchMap';
+import { PartnershipChart } from '../components/charts/PartnershipChart';
+import { HeadToHeadCard } from '../components/charts/HeadToHeadCard';
 
 type InningsFilter = 'all' | number;
 
@@ -52,6 +54,24 @@ export function AnalyticsPage() {
     queryFn: () => api.getPitchMap(matchId!, pitchMapParams),
     enabled: !!matchId,
   });
+
+  const { data: partnershipData, isLoading: partnershipLoading } = useQuery({
+    queryKey: ['partnerships', matchId],
+    queryFn: () => api.getPartnerships(matchId!),
+    enabled: !!matchId,
+  });
+
+  // Build player lists from scorecard for head-to-head selector
+  const batsmen = (scorecard || []).flatMap((inn: any) =>
+    (inn.batting || [])
+      .filter((b: any) => !b.didNotBat)
+      .map((b: any) => ({ id: b.playerId, name: b.playerName || `Player #${b.battingPosition}` })),
+  );
+  const bowlers = (scorecard || []).flatMap((inn: any) =>
+    (inn.bowling || [])
+      .filter((b: any) => parseFloat(b.oversBowled) > 0)
+      .map((b: any) => ({ id: b.playerId, name: b.playerName || `Bowler #${b.bowlingPosition}` })),
+  );
 
   const teamNames = matchData?.teams?.map((t) => t.teamName) || [];
   const inningsCount = scorecard?.length || 0;
@@ -177,6 +197,28 @@ export function AnalyticsPage() {
         >
           <ChartHeader icon={<Target size={16} />} title="Pitch Map" subtitle="Ball landing positions" />
           {pitchLoading ? <ChartSkeleton /> : <PitchMap data={pitchData || []} />}
+        </motion.div>
+
+        {/* Partnership Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 250, damping: 22, delay: 0.25 }}
+          className="card relative overflow-hidden lg:col-span-2"
+        >
+          <ChartHeader icon={<Link2 size={16} />} title="Partnerships" subtitle="Run contributions per wicket partnership" />
+          {partnershipLoading ? <ChartSkeleton /> : <PartnershipChart data={partnershipData || []} />}
+        </motion.div>
+
+        {/* Head-to-Head Card */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: 'spring', stiffness: 250, damping: 22, delay: 0.3 }}
+          className="card relative overflow-hidden lg:col-span-2"
+        >
+          <ChartHeader icon={<Swords size={16} />} title="Head to Head" subtitle="Batsman vs bowler matchup analysis" />
+          <HeadToHeadCard batsmen={batsmen} bowlers={bowlers} />
         </motion.div>
       </div>
     </motion.div>

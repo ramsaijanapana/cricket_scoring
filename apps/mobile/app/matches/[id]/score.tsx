@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,22 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { api } from "../../../lib/api";
 import { colors } from "../../../lib/theme";
+import { hapticBoundary, hapticWicket, hapticUndo, hapticTap } from "../../../lib/haptics";
+import {
+  connectSocket,
+  joinMatchRoom,
+  leaveMatchRoom,
+  onMatchEvent,
+  disconnectSocket,
+} from "../../../lib/socket";
+import {
+  queueDelivery,
+  getPendingCount,
+  syncPendingDeliveries,
+  isOnline,
+  startAutoSync,
+  stopAutoSync,
+} from "../../../lib/offline-sync";
 
 const RUN_BUTTONS = [0, 1, 2, 3, 4, 6] as const;
 
@@ -28,6 +44,9 @@ export default function LiveScoringScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [selectedExtra, setSelectedExtra] = useState<string | null>(null);
   const [isWicket, setIsWicket] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [isConnected, setIsConnected] = useState(true);
+  const unsubMatchEvent = useRef<(() => void) | null>(null);
 
   const fetchMatch = useCallback(async () => {
     if (!id) return;
@@ -41,26 +60,124 @@ export default function LiveScoringScreen() {
     }
   }, [id]);
 
+  // Refresh pending count from the offline queue
+  const refreshPendingCount = useCallback(async () => {
+    const count = await getPendingCount();
+    setPendingCount(count);
+  }, []);
+
+  // ─── WebSocket setup ────────────────────────────────────────────────
+  useEffect(() => {
+    if (!id) return;
+
+    let mounted = true;
+
+    async function initSocket() {
+      try {
+        await connectSocket();
+        joinMatchRoom(id!);
+
+        unsubMatchEvent.current = onMatchEvent((event) => {
+          if (!mounted) return;
+          // Re-fetch match data on any real-time event
+          fetchMatch();
+        });
+
+        if (mounted) setIsConnected(true);
+      } catch {
+        if (mounted) setIsConnected(false);
+      }
+    }
+
+    initSocket();
+
+    return () => {
+      mounted = false;
+      unsubMatchEvent.current?.();
+      if (id) leaveMatchRoom(id);
+    };
+  }, [id, fetchMatch]);
+
+  // ─── Offline sync setup ─────────────────────────────────────────────
+  useEffect(() => {
+    startAutoSync();
+    refreshPendingCount();
+
+    // Periodically refresh pending count
+    const interval = setInterval(refreshPendingCount, 3000);
+
+    return () => {
+      stopAutoSync();
+      clearInterval(interval);
+    };
+  }, [refreshPendingCount]);
+
+  // ─── Network status check ──────────────────────────────────────────
+  useEffect(() => {
+    const checkNetwork = async () => {
+      const online = await isOnline();
+      setIsConnected(online);
+    };
+    checkNetwork();
+    const interval = setInterval(checkNetwork, 5000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Initial match fetch
   useEffect(() => {
     fetchMatch();
   }, [fetchMatch]);
 
   const recordBall = async (runs: number) => {
     if (!id || submitting) return;
+
+    // Haptic feedback based on scoring action
+    if (isWicket) {
+      hapticWicket();
+    } else if (runs === 4 || runs === 6) {
+      hapticBoundary();
+    } else {
+      hapticTap();
+    }
+
     setSubmitting(true);
+
+    const payload = {
+      runs_batsman: selectedExtra ? 0 : runs,
+      runs_extras: selectedExtra ? runs + 1 : 0,
+      extra_type: selectedExtra,
+      is_wicket: isWicket,
+      total_runs: selectedExtra ? runs + 1 : runs,
+    };
+
     try {
-      await api.recordDelivery(id, {
-        runs_batsman: selectedExtra ? 0 : runs,
-        runs_extras: selectedExtra ? runs + 1 : 0,
-        extra_type: selectedExtra,
-        is_wicket: isWicket,
-        total_runs: selectedExtra ? runs + 1 : runs,
-      });
+      const online = await isOnline();
+
+      if (online) {
+        await api.recordDelivery(id, payload);
+      } else {
+        // Queue for later sync
+        await queueDelivery(id, payload);
+        await refreshPendingCount();
+      }
+
       setSelectedExtra(null);
       setIsWicket(false);
-      await fetchMatch();
+
+      // Only fetch if online; offline state will be reconciled on sync
+      if (online) {
+        await fetchMatch();
+      }
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to record delivery");
+      // Network error during request - queue offline
+      try {
+        await queueDelivery(id, payload);
+        await refreshPendingCount();
+        setSelectedExtra(null);
+        setIsWicket(false);
+      } catch {
+        Alert.alert("Error", err.message || "Failed to record delivery");
+      }
     } finally {
       setSubmitting(false);
     }
@@ -68,12 +185,23 @@ export default function LiveScoringScreen() {
 
   const undoLast = async () => {
     if (!id || !match?.currentInnings?.id) return;
+    hapticUndo();
     try {
       await api.undoLastBall(id, match.currentInnings.id);
       await fetchMatch();
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to undo");
     }
+  };
+
+  const handleExtraToggle = (value: string) => {
+    hapticTap();
+    setSelectedExtra(selectedExtra === value ? null : value);
+  };
+
+  const handleWicketToggle = () => {
+    hapticTap();
+    setIsWicket(!isWicket);
   };
 
   if (loading) {
@@ -93,6 +221,34 @@ export default function LiveScoringScreen() {
   return (
     <View className="flex-1 bg-surface-900">
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 200 }}>
+        {/* Connection / Offline status bar */}
+        {(!isConnected || pendingCount > 0) && (
+          <View
+            className={`mb-3 flex-row items-center justify-between rounded-lg px-4 py-2 ${
+              !isConnected ? "bg-cricket-red/20" : "bg-cricket-gold/20"
+            }`}
+          >
+            <View className="flex-row items-center gap-2">
+              <View
+                className={`h-2 w-2 rounded-full ${
+                  !isConnected ? "bg-cricket-red" : "bg-cricket-gold"
+                }`}
+              />
+              <Text className="text-xs text-surface-300">
+                {!isConnected ? "Offline" : "Online"}
+              </Text>
+            </View>
+            {pendingCount > 0 && (
+              <View className="flex-row items-center gap-1 rounded-full bg-cricket-gold px-2 py-0.5">
+                <Text className="text-xs font-bold text-surface-900">
+                  {pendingCount}
+                </Text>
+                <Text className="text-xs text-surface-900">pending</Text>
+              </View>
+            )}
+          </View>
+        )}
+
         {/* Score display */}
         <View className="mb-4 items-center rounded-xl bg-surface-800 p-6">
           <Text className="mb-2 text-sm font-medium text-surface-400">
@@ -190,11 +346,7 @@ export default function LiveScoringScreen() {
           {EXTRA_TYPES.map((extra) => (
             <Pressable
               key={extra.value}
-              onPress={() =>
-                setSelectedExtra(
-                  selectedExtra === extra.value ? null : extra.value
-                )
-              }
+              onPress={() => handleExtraToggle(extra.value)}
               className={`flex-1 items-center rounded-lg py-2 ${
                 selectedExtra === extra.value
                   ? "bg-cricket-gold"
@@ -213,7 +365,7 @@ export default function LiveScoringScreen() {
             </Pressable>
           ))}
           <Pressable
-            onPress={() => setIsWicket(!isWicket)}
+            onPress={handleWicketToggle}
             className={`flex-1 items-center rounded-lg py-2 ${
               isWicket ? "bg-cricket-red" : "bg-surface-700"
             }`}

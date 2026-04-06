@@ -12,6 +12,8 @@ const TournamentPage = lazy(() => import('./pages/TournamentPage').then(m => ({ 
 const SettingsPage = lazy(() => import('./pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const FeedPage = lazy(() => import('./pages/FeedPage').then(m => ({ default: m.FeedPage })));
 const FantasyPage = lazy(() => import('./pages/FantasyPage').then(m => ({ default: m.FantasyPage })));
+const RecordsPage = lazy(() => import('./pages/RecordsPage').then(m => ({ default: m.RecordsPage })));
+const OverByOverPage = lazy(() => import('./pages/OverByOverPage').then(m => ({ default: m.OverByOverPage })));
 
 function LoadingSpinner() {
   return (
@@ -77,10 +79,12 @@ export function App() {
           <Route path="/matches/:id/score" element={<AnimatedPage><ScoringPage /></AnimatedPage>} />
           <Route path="/matches/:id/scorecard" element={<AnimatedPage><ScorecardPage /></AnimatedPage>} />
           <Route path="/matches/:id/analytics" element={<AnimatedPage><AnalyticsPage /></AnimatedPage>} />
+          <Route path="/matches/:id/overs" element={<AnimatedPage><OverByOverPage /></AnimatedPage>} />
           <Route path="/tournaments" element={<AnimatedPage><TournamentPage /></AnimatedPage>} />
           <Route path="/tournaments/:id" element={<AnimatedPage><TournamentPage /></AnimatedPage>} />
           <Route path="/feed" element={<AnimatedPage><FeedPage /></AnimatedPage>} />
           <Route path="/fantasy" element={<AnimatedPage><FantasyPage /></AnimatedPage>} />
+          <Route path="/records" element={<AnimatedPage><RecordsPage /></AnimatedPage>} />
           <Route path="/settings" element={<AnimatedPage><SettingsPage /></AnimatedPage>} />
         </Route>
       </Routes>
