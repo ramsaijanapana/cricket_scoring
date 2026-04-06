@@ -1,14 +1,14 @@
 {
   "project": "cricket_scoring",
-  "updatedAt": "2026-04-06T00:18:06.723Z",
+  "updatedAt": "2026-04-06T00:19:23.722Z",
   "branch": "main",
-  "head": "029bc4a",
+  "head": "8b3078b",
   "currentFocus": "npm command troubleshooting",
   "latestSummary": [
-    "All 60 enhancements implemented across 8 sprints"
+    "All 60 enhancements complete"
   ],
   "nextSteps": [
-    "Production deployment, end-to-end testing, mobile app completion"
+    "Production deployment"
   ],
   "risks": [
     "Interactive PowerShell may still fail on machines where npm.ps1 is blocked by execution policy even though npm works in non-interactive runners."
@@ -23,42 +23,31 @@
   "workingTree": {
     "changedFiles": [
       "claude/worktrees/agent-a6aaeee9",
-      "apps/api/src/db/schema/index.ts",
-      "apps/api/src/engine/commentary-engine.ts",
-      "apps/api/src/routes/deliveries.ts",
-      "apps/api/src/routes/fantasy.ts",
-      "apps/api/src/routes/notifications.ts",
-      "apps/api/src/routes/players.ts",
-      "apps/api/src/server.ts",
-      "apps/api/src/workers/notification-worker.ts",
-      "apps/web/src/App.tsx",
-      "apps/web/src/components/Layout.tsx",
-      "apps/web/src/lib/api.ts",
-      "apps/web/src/pages/ScorecardPage.tsx",
-      "apps/web/src/pages/ScoringPage.tsx",
-      "apps/web/src/pages/SettingsPage.tsx",
-      "apps/api/src/db/schema/device-token.ts",
-      "apps/api/src/db/schema/notification-preference.ts",
-      "apps/api/src/db/schema/reaction.ts",
-      "apps/api/src/engine/commentary-templates/en.ts",
-      "apps/api/src/engine/commentary-templates/hi.ts",
-      "apps/api/src/engine/fantasy-scoring.ts",
-      "apps/api/src/routes/audit-log.ts",
-      "apps/api/src/routes/reactions.ts",
-      "apps/api/src/routes/venues.ts",
-      "apps/api/src/services/push-service.ts",
-      "apps/web/public/firebase-messaging-sw.js",
-      "apps/web/src/components/AuditLogPanel.tsx",
-      "apps/web/src/components/MatchChat.tsx",
-      "apps/web/src/components/NotificationBell.tsx",
-      "apps/web/src/components/ReactionBar.tsx",
-      "apps/web/src/lib/social-socket.ts",
-      "apps/web/src/pages/FantasyPage.tsx",
-      "apps/web/src/pages/FeedPage.tsx"
+      "ENHANCEMENTS.md"
     ],
-    "stagedFiles": []
+    "stagedFiles": [
+      "ENHANCEMENTS.md"
+    ]
   },
   "recentCheckpoints": [
+    {
+      "updatedAt": "2026-04-06T00:19:23.722Z",
+      "actor": "ramsa",
+      "focus": "npm command troubleshooting",
+      "summary": [
+        "All 60 enhancements complete"
+      ],
+      "nextSteps": [
+        "Production deployment"
+      ],
+      "risks": [],
+      "decisions": [],
+      "verification": [],
+      "changedFiles": [
+        "claude/worktrees/agent-a6aaeee9",
+        "ENHANCEMENTS.md"
+      ]
+    },
     {
       "updatedAt": "2026-04-06T00:18:06.723Z",
       "actor": "ramsa",
@@ -429,29 +418,6 @@
         "scripts/e2e-test.sh",
         "scripts/mock-api.mjs"
       ]
-    },
-    {
-      "updatedAt": "2026-04-05T13:33:06.205Z",
-      "actor": "ramsa",
-      "focus": "Agent context workflow setup",
-      "summary": [
-        "Installed the reusable agent handoff workflow in this repository.",
-        "Corrected the README handoff section so it no longer points to a missing bootstrap script."
-      ],
-      "nextSteps": [
-        "Use context:update after each meaningful change and refresh the handoff again before stopping work."
-      ],
-      "risks": [
-        "PowerShell blocks npm.ps1 on this machine, so use npm.cmd or node scripts/context-handoff.mjs if npm run fails."
-      ],
-      "decisions": [
-        "AGENTS.md, AGENT_HANDOFF.md, and .agent-context/state.json are the required handoff source of truth for future agents."
-      ],
-      "verification": [
-        "Ran node scripts/context-handoff.mjs status successfully.",
-        "Confirmed the pre-commit hook runs scripts/context-handoff.mjs check --staged."
-      ],
-      "changedFiles": []
     }
   ]
 }
