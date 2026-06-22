@@ -3,6 +3,7 @@ import { useInfiniteQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { Rss, Clock, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 interface FeedItem {
   feedItemId: string;
@@ -19,6 +20,8 @@ interface FeedItem {
 }
 
 export function FeedPage() {
+  useDocumentTitle('Feed');
+
   const {
     data,
     isLoading,

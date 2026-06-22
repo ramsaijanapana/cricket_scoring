@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import type { Delivery } from '@cricket/shared';
 import { api } from '../lib/api';
+import { useDocumentTitle, matchDocumentTitle } from '../hooks/useDocumentTitle';
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -94,6 +95,8 @@ export function OverByOverPage() {
     queryFn: () => api.getMatch(matchId!),
     enabled: !!matchId,
   });
+
+  useDocumentTitle(matchDocumentTitle(matchData?.teams, 'Over by Over'));
 
   const {
     data: deliveries,

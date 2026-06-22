@@ -1,18 +1,20 @@
 version: "3.9"
 
-# ── Production Docker Compose ────────────────────────────────────────────────
-# Usage: docker compose -f docker-compose.prod.yml up -d
-# Requires: .env file with production secrets
+# ── Production Docker Compose (GHCR images) ────────────────────────────────
+# Usage:
+#   export REGISTRY=ghcr.io
+#   export IMAGE_PREFIX=owner/cricket_scoring
+#   export IMAGE_TAG=<git-sha-or-latest>
+#   docker compose -f docker-compose.prod.yml pull
+#   docker compose -f docker-compose.prod.yml --profile migrate run --rm migrate
+#   docker compose -f docker-compose.prod.yml up -d
 #
-# Run DB migrations before or after first deploy:
-#   docker compose -f docker-compose.prod.yml run --rm migrate
+# Requires: .env with production secrets (see .env.example)
 
 services:
   # ── DB migrations (one-shot init) ──────────────────────────────────────────
   migrate:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:?IMAGE_PREFIX is required}/api:${IMAGE_TAG:-latest}
     container_name: cricscore_migrate
     profiles:
       - migrate
@@ -29,9 +31,7 @@ services:
 
   # ── API Server ─────────────────────────────────────────────────────────────
   api:
-    build:
-      context: .
-      dockerfile: apps/api/Dockerfile
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:?IMAGE_PREFIX is required}/api:${IMAGE_TAG:-latest}
     container_name: cricscore_api
     restart: unless-stopped
     environment:
@@ -86,9 +86,7 @@ services:
 
   # ── Web (nginx) ────────────────────────────────────────────────────────────
   web:
-    build:
-      context: .
-      dockerfile: apps/web/Dockerfile
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:?IMAGE_PREFIX is required}/web:${IMAGE_TAG:-latest}
     container_name: cricscore_web
     restart: unless-stopped
     ports:
@@ -99,7 +97,7 @@ services:
       api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
       interval: 30s
       timeout: 5s
       retries: 3

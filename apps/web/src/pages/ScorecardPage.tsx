@@ -8,6 +8,7 @@ import { CommentaryFeed } from '../components/CommentaryFeed';
 import { MatchChat } from '../components/MatchChat';
 import { AuditLogPanel } from '../components/AuditLogPanel';
 import { SpectatorBadge } from '../components/SpectatorBadge';
+import { useDocumentTitle, matchDocumentTitle } from '../hooks/useDocumentTitle';
 
 const inningsContainerVariants = {
   hidden: {},
@@ -60,6 +61,8 @@ export function ScorecardPage() {
     queryFn: () => api.getMatch(matchId!),
     enabled: !!matchId,
   });
+
+  useDocumentTitle(matchDocumentTitle(matchData?.teams, 'Scorecard'));
 
   if (isLoading) {
     return (

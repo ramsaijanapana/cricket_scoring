@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Trophy, Users, Plus, ChevronRight, X, Star } from 'lucide-react';
 import { api } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 interface Contest {
   id: string;
@@ -28,6 +29,8 @@ interface LeaderboardEntry {
 type FantasyTab = 'contests' | 'my-contests';
 
 export function FantasyPage() {
+  useDocumentTitle('Fantasy');
+
   const [activeTab, setActiveTab] = useState<FantasyTab>('contests');
   const [selectedContestId, setSelectedContestId] = useState<string | null>(null);
   const [showCreateTeam, setShowCreateTeam] = useState<string | null>(null);

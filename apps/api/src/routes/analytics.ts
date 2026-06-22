@@ -1,7 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { delivery } from '../db/schema/index';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, isNotNull, sql } from 'drizzle-orm';
+
+/** Cap rows returned for wagon-wheel scatter plots. */
+const ANALYTICS_WAGON_WHEEL_LIMIT = 5_000;
+/** Cap deliveries scanned when building worm-chart series. */
+const ANALYTICS_WORM_CHART_DELIVERY_LIMIT = 10_000;
 
 /**
  * Analytics routes — context.md section 6.1
@@ -19,52 +24,62 @@ export const analyticsRoutes: FastifyPluginAsync = async (app) => {
     Params: { matchId: string };
     Querystring: { innings?: string; player_id?: string };
   }>('/matches/:matchId/wagon-wheel', async (req) => {
-    const conditions = [
-      eq(delivery.matchId, req.params.matchId),
-      eq(delivery.isOverridden, false),
-    ];
+    const rows = await db
+      .select({
+        id: delivery.id,
+        wagonX: delivery.wagonX,
+        wagonY: delivery.wagonY,
+        runs: delivery.runsBatsman,
+        shotType: delivery.shotType,
+        strikerId: delivery.strikerId,
+        bowlerId: delivery.bowlerId,
+        isWicket: delivery.isWicket,
+      })
+      .from(delivery)
+      .where(
+        and(
+          eq(delivery.matchId, req.params.matchId),
+          eq(delivery.isOverridden, false),
+          isNotNull(delivery.wagonX),
+          isNotNull(delivery.wagonY),
+        ),
+      )
+      .orderBy(desc(delivery.undoStackPos))
+      .limit(ANALYTICS_WAGON_WHEEL_LIMIT);
 
-    const deliveries = await db.query.delivery.findMany({
-      where: and(...conditions),
-      orderBy: [desc(delivery.undoStackPos)],
-    });
-
-    // Filter for shots with wagon wheel data
-    return deliveries
-      .filter(d => d.wagonX !== null && d.wagonY !== null)
-      .map(d => ({
-        id: d.id,
-        wagonX: d.wagonX,
-        wagonY: d.wagonY,
-        runs: d.runsBatsman,
-        shotType: d.shotType,
-        strikerId: d.strikerId,
-        bowlerId: d.bowlerId,
-        isWicket: d.isWicket,
-      }));
+    return rows;
   });
 
   // Worm Chart — cumulative runs per over vs par/target
   app.get<{ Params: { matchId: string } }>('/matches/:matchId/worm-chart', async (req) => {
-    const deliveries = await db.query.delivery.findMany({
-      where: and(
-        eq(delivery.matchId, req.params.matchId),
-        eq(delivery.isOverridden, false),
-      ),
-      orderBy: [desc(delivery.undoStackPos)],
-    });
+    const grouped = await db.execute<{
+      innings_num: number;
+      points: Array<{ over: number; runs: number }>;
+    }>(sql`
+      WITH limited_deliveries AS (
+        SELECT over_num, innings_score, undo_stack_pos
+        FROM delivery
+        WHERE match_id = ${req.params.matchId}::uuid
+          AND is_overridden = false
+        ORDER BY undo_stack_pos DESC
+        LIMIT ${ANALYTICS_WORM_CHART_DELIVERY_LIMIT}
+      )
+      SELECT
+        over_num AS innings_num,
+        coalesce(
+          json_agg(
+            json_build_object('over', over_num, 'runs', innings_score)
+            ORDER BY undo_stack_pos DESC
+          ),
+          '[]'::json
+        ) AS points
+      FROM limited_deliveries
+      GROUP BY over_num
+    `);
 
-    // Group by innings and over, accumulate runs
     const wormData: Record<number, Array<{ over: number; runs: number }>> = {};
-
-    for (const d of deliveries) {
-      const inningsNum = d.overNum; // simplified; should use innings number
-      if (!wormData[inningsNum]) wormData[inningsNum] = [];
-
-      wormData[inningsNum].push({
-        over: d.overNum,
-        runs: d.inningsScore,
-      });
+    for (const row of grouped) {
+      wormData[row.innings_num] = row.points ?? [];
     }
 
     return wormData;

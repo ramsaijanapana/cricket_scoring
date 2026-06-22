@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trophy, Zap, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 const cardVariants = {
   hidden: { opacity: 0, y: 16, scale: 0.98 },
@@ -25,6 +26,8 @@ const skeletonVariants = {
 };
 
 export function HomePage() {
+  useDocumentTitle('Home');
+
   const { data: matches, isLoading, isError, refetch } = useQuery({
     queryKey: ['matches'],
     queryFn: api.getMatches,

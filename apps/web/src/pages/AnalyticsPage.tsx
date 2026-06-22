@@ -10,6 +10,7 @@ import { WagonWheel } from '../components/charts/WagonWheel';
 import { PitchMap } from '../components/charts/PitchMap';
 import { PartnershipChart } from '../components/charts/PartnershipChart';
 import { HeadToHeadCard } from '../components/charts/HeadToHeadCard';
+import { useDocumentTitle, matchDocumentTitle } from '../hooks/useDocumentTitle';
 
 type InningsFilter = 'all' | number;
 
@@ -22,6 +23,8 @@ export function AnalyticsPage() {
     queryFn: () => api.getMatch(matchId!),
     enabled: !!matchId,
   });
+
+  useDocumentTitle(matchDocumentTitle(matchData?.teams, 'Analytics'));
 
   const { data: scorecard, isError: scorecardError, refetch: refetchScorecard } = useQuery({
     queryKey: ['scorecard', matchId],

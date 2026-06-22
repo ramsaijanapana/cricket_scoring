@@ -17,6 +17,7 @@ import { MatchChat } from '../components/MatchChat';
 import { MatchBreakScreen } from '../components/MatchBreakScreen';
 import { SpectatorBadge } from '../components/SpectatorBadge';
 import { LivePredictionChart } from '../components/charts/LivePredictionChart';
+import { useDocumentTitle, matchDocumentTitle } from '../hooks/useDocumentTitle';
 
 type ExtrasMode = 'normal' | 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty';
 
@@ -209,6 +210,8 @@ export function ScoringPage() {
     queryFn: () => api.getMatch(matchId!),
     enabled: !!matchId,
   });
+
+  useDocumentTitle(matchDocumentTitle(matchData?.teams, 'Scoring'));
 
   const isRainDelayed = matchData?.status === 'rain_delay' || breakStatus === 'rain_delay';
   const { data: dlsState } = useQuery({

@@ -54,6 +54,34 @@ export const deliveryInputSchema = z.object({
   client_id: z.string().uuid().optional(),
 });
 
+// ─── Team & Player schemas ──────────────────────────────────────────────────
+
+export const createTeamSchema = z.object({
+  name: z.string().min(1).max(200),
+  shortName: z.string().max(10).optional(),
+  country: z.string().max(100).optional(),
+  teamType: z.enum(['international', 'domestic', 'club', 'custom']),
+  logoUrl: z.string().optional(),
+});
+
+export const createPlayerSchema = z.object({
+  firstName: z.string().min(1).max(100),
+  lastName: z.string().min(1).max(100),
+  dateOfBirth: z.string().optional(),
+  battingStyle: z.enum(['right_hand', 'left_hand']).optional(),
+  bowlingStyle: z.enum([
+    'right_arm_fast',
+    'right_arm_medium',
+    'right_arm_off_break',
+    'right_arm_leg_break',
+    'left_arm_fast',
+    'left_arm_medium',
+    'left_arm_orthodox',
+    'left_arm_chinaman',
+  ]).optional(),
+  primaryRole: z.enum(['batsman', 'bowler', 'all_rounder', 'wicket_keeper']).optional(),
+});
+
 // ─── Tournament schemas ─────────────────────────────────────────────────────
 
 export const createTournamentSchema = z.object({
@@ -91,5 +119,7 @@ export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateMatchInput = z.infer<typeof createMatchSchema>;
 export type DeliverySchemaInput = z.infer<typeof deliveryInputSchema>;
+export type CreateTeamInput = z.infer<typeof createTeamSchema>;
+export type CreatePlayerInput = z.infer<typeof createPlayerSchema>;
 export type CreateTournamentInput = z.infer<typeof createTournamentSchema>;
 export type AddFixtureInput = z.infer<typeof addFixtureSchema>;

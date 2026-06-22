@@ -50,6 +50,10 @@ export default function RootLayout() {
           options={{ title: "Sign In", presentation: "modal" }}
         />
         <Stack.Screen
+          name="register"
+          options={{ title: "Create Account", presentation: "modal" }}
+        />
+        <Stack.Screen
           name="chat/[id]"
           options={{ title: "Chat" }}
         />

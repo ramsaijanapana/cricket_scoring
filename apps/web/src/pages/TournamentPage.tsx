@@ -14,6 +14,7 @@ import {
   UserMinus,
 } from 'lucide-react';
 import { api } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 import type {
   TournamentDetail,
   PointsTableEntry,
@@ -25,6 +26,8 @@ import type {
 // ─── Tournament List ────────────────────────────────────────────────────────
 
 function TournamentList() {
+  useDocumentTitle('Tournaments');
+
   const [statusFilter, setStatusFilter] = useState<string>('');
   const [showCreateForm, setShowCreateForm] = useState(false);
 
@@ -374,6 +377,8 @@ function TournamentDetailView() {
     queryFn: () => api.getTournament(id!),
     enabled: !!id,
   });
+
+  useDocumentTitle(tournament?.name || 'Tournament');
 
   const { data: pointsData } = useQuery({
     queryKey: ['points-table', id],

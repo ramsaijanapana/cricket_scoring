@@ -13,8 +13,11 @@ import {
   CheckCircle,
 } from 'lucide-react';
 import { api, clearAuthToken } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export function SettingsPage() {
+  useDocumentTitle('Settings');
+
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
 

@@ -4,6 +4,7 @@ import { team } from '../db/schema/index';
 import { eq } from 'drizzle-orm';
 import { requireAuth, requireRole } from '../middleware/auth';
 import { parsePagination, paginatedResponse } from '../middleware/pagination';
+import { validateBody, createTeamSchema } from '../middleware/validation';
 
 export const teamRoutes: FastifyPluginAsync = async (app) => {
   // List all teams
@@ -27,15 +28,14 @@ export const teamRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Create team
-  app.post<{
-    Body: { name: string; shortName?: string; country?: string; teamType: string; logoUrl?: string };
-  }>('/', { preHandler: [requireAuth] }, async (req, reply) => {
+  app.post('/', { preHandler: [requireAuth, validateBody(createTeamSchema)] }, async (req, reply) => {
+    const body = (req as any).validated;
     const [newTeam] = await db.insert(team).values({
-      name: req.body.name,
-      shortName: req.body.shortName,
-      country: req.body.country,
-      teamType: req.body.teamType,
-      logoUrl: req.body.logoUrl,
+      name: body.name,
+      shortName: body.shortName,
+      country: body.country,
+      teamType: body.teamType,
+      logoUrl: body.logoUrl,
     }).returning();
     return reply.status(201).send(newTeam);
   });

@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-06-22T14:31:35.636Z
+- Updated: 2026-06-22T14:41:18.616Z
 - Branch: main
-- Head: b0b29d3
-- Focus: P1 complete
+- Head: 8bd7d31
+- Focus: P2 complete
 
 ## Latest Summary
 
-- P1 sprint: 12 agents — match start, GET /users/me, deploy staging, E2E CI, ScoringPage hooks, mobile nav, orphaned components, orchestrator, offline sync, push reg, shared schemas, FeedPage RQ
+- P2 sprint: 12 agents — prod deploy, Playwright, mobile tests, delivery integration, nginx hardening, shared schemas, socket auth, analytics SQL, register screen, README, document titles
 
 ## Next Steps
 
-- Force push to main (remote wiped) or merge branch; production deploy stub
+- Run bash E2E with docker; wire Playwright into CI; commit P2
 
 ## Risks / Watchouts
 
@@ -27,70 +27,70 @@
 
 ## Verification
 
-- npm test 178/178
+- npm test 193/193
 
 ## Working Tree Snapshot
 
-- Changed files: 29
+- Changed files: 38
 - Staged files: 0
 - agent-context/state.json
-- .github/workflows/ci.yml
 - .github/workflows/deploy.yml
+- README.md
 - apps/api/src/middleware/validation.ts
-- apps/api/src/routes/deliveries.ts
-- apps/api/src/routes/tournaments.ts
-- apps/api/src/routes/users.ts
+- apps/api/src/routes/analytics.ts
+- apps/api/src/routes/players.ts
+- apps/api/src/routes/teams.ts
 - apps/mobile/app/_layout.tsx
 - apps/mobile/app/login.tsx
-- apps/mobile/app/matches/[id]/score.tsx
-- apps/mobile/app/matches/new.tsx
-- apps/mobile/lib/api.ts
-- apps/mobile/lib/notifications.ts
-- apps/mobile/lib/offline-sync.ts
+- apps/mobile/package.json
 - apps/web/nginx.conf.template
-- apps/web/src/components/CommentaryFeed.tsx
-- apps/web/src/components/Layout.tsx
+- apps/web/package.json
+- apps/web/src/lib/socket.ts
+- apps/web/src/pages/AnalyticsPage.tsx
+- apps/web/src/pages/CreateMatchPage.tsx
+- apps/web/src/pages/FantasyPage.tsx
 - apps/web/src/pages/FeedPage.tsx
-- apps/web/src/pages/ScorecardPage.tsx
-- apps/web/src/pages/ScoringPage.tsx
-- +9 more changed files
+- apps/web/src/pages/HomePage.tsx
+- apps/web/src/pages/LoginPage.tsx
+- apps/web/src/pages/OverByOverPage.tsx
+- +18 more changed files
 
 ## Recent Checkpoints
 
-### 2026-06-22T14:31:35.636Z — P1 complete
+### 2026-06-22T14:41:18.616Z — P2 complete
 
 - Actor: test
-- Summary: P1 sprint: 12 agents — match start, GET /users/me, deploy staging, E2E CI, ScoringPage hooks, mobile nav, orphaned components, orchestrator, offline sync, push reg, shared schemas, FeedPage RQ
-- Next: Force push to main (remote wiped) or merge branch; production deploy stub
-- Verified: npm test 178/178
+- Summary: P2 sprint: 12 agents — prod deploy, Playwright, mobile tests, delivery integration, nginx hardening, shared schemas, socket auth, analytics SQL, register screen, README, document titles
+- Next: Run bash E2E with docker; wire Playwright into CI; commit P2
+- Verified: npm test 193/193
 
-### 2026-06-22T14:23:33.137Z — E2E CI
-
-- Actor: test
-- Summary: CI e2e job runs test:e2e:all (smoke+phase2+architecture); phase2 e2e script migrated from x-user-id to Bearer auth
-- Next: P1 sprint: match start, deploy, ScoringPage split
-- Verified: bash -n on e2e-test.sh, e2e-test-phase2.sh, e2e-test-architecture.sh
-
-### 2026-06-22T14:22:01.482Z — web component integration
+### 2026-06-22T14:39:55.477Z — P2 analytics SQL
 
 - Actor: test
-- Summary: Web P1: wired MatchBreakScreen, SpectatorBadge, ReactionBar, LivePredictionChart into ScoringPage/ScorecardPage/CommentaryFeed; extended useMatchSocket for status/DLS
-- Next: P1 sprint: deploy, E2E CI, remaining orphaned components audit
-- Verified: npm test 178/178 (api 149 + web 29)
+- Summary: P2 analytics: wagon-wheel and worm-chart use SQL select/aggregation with LIMIT safeguards (5k/10k)
+- Next: P2: remaining analytics endpoints, Playwright E2E, production deploy stub
+- Verified: npm test 193/193 (api 152 + web 31 + mobile 10)
 
-### 2026-06-22T14:21:51.222Z — P1 mobile offline scoring
-
-- Actor: test
-- Summary: Mobile offline scoring: optimistic local updates, client_id/expected_stack_pos sync, 409 conflict refetch+alert, expo-network listener replaces 5s poll
-- Next: P1 sprint: match start, deploy, E2E CI, ScoringPage split
-- Verified: apps/mobile lint: no new errors in offline-sync.ts; score.tsx/api.ts updated
-
-### 2026-06-22T14:20:46.953Z — mobile match start
+### 2026-06-22T14:38:55.661Z — Web P2 Playwright E2E
 
 - Actor: test
-- Summary: Mobile match start lifecycle: fixed startMatch/recordToss API contracts, 3-step new match wizard (setup/toss/XI), getPlayers/getTeams paginated unwrap
-- Next: P1: deploy wiring, E2E CI, ScoringPage split
-- Verified: npm test 178/178; mobile tsc run (pre-existing nativewind className errors)
+- Summary: Web P2: Playwright E2E smoke tests — scoring-smoke.spec.ts (home, login, create match); playwright.config.ts with vite webServer; @playwright/test devDep; test:e2e:playwright scripts in web + root
+- Next: P2 remaining items; wire Playwright into CI if desired
+- Verified: npm run test:e2e:playwright — 3/3 passed
+
+### 2026-06-22T14:38:23.375Z — Web P2 document titles
+
+- Actor: test
+- Summary: Web P2: per-route document titles via useDocumentTitle hook on all pages; match routes use team names when available
+- Next: Continue P2 sprint items
+- Verified: apps/web npm test 31/31
+
+### 2026-06-22T14:38:16.795Z — P2 production deploy
+
+- Actor: test
+- Summary: P2 production deploy: docker-compose.prod.yml GHCR images, deploy.yml mirrors staging (migrate, smoke /health, manual approval gate)
+- Next: Configure GitHub production environment secrets; force push or merge P1 branch
+- Verified: deploy.yml production job mirrors staging; docker-compose.prod.yml uses GHCR images
 
 ## Workflow Rule
 

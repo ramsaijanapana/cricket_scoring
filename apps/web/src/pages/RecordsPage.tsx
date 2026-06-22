@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Target, Users, Swords } from 'lucide-react';
 import { api } from '../lib/api';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 type RecordTab = 'batting' | 'bowling' | 'team' | 'match';
 type FormatFilter = 'all' | 'T20' | 'ODI' | 'Test';
@@ -17,6 +18,8 @@ const TABS: { key: RecordTab; label: string; icon: React.ReactNode }[] = [
 const FORMATS: FormatFilter[] = ['all', 'T20', 'ODI', 'Test'];
 
 export function RecordsPage() {
+  useDocumentTitle('Records');
+
   const [activeTab, setActiveTab] = useState<RecordTab>('batting');
   const [format, setFormat] = useState<FormatFilter>('all');
 

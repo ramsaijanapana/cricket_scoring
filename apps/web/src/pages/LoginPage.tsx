@@ -4,8 +4,11 @@ import { motion } from 'framer-motion';
 import { LogIn } from 'lucide-react';
 import { api, setAuthToken, setRefreshToken, setUserId, parseJwtPayload } from '../lib/api';
 import { setSentryUser } from '../lib/sentry';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 export function LoginPage() {
+  useDocumentTitle('Login');
+
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const redirectTo = searchParams.get('redirect') || '/';

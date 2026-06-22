@@ -4,6 +4,7 @@ import { player, playerTeamMembership, battingScorecard, innings } from '../db/s
 import { eq, and, desc, sql } from 'drizzle-orm';
 import { parsePagination, paginatedResponse } from '../middleware/pagination';
 import { requireAuth } from '../middleware/auth';
+import { validateBody, createPlayerSchema } from '../middleware/validation';
 
 export const playerRoutes: FastifyPluginAsync = async (app) => {
   // List all players
@@ -27,23 +28,15 @@ export const playerRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Create player
-  app.post<{
-    Body: {
-      firstName: string;
-      lastName: string;
-      dateOfBirth?: string;
-      battingStyle?: string;
-      bowlingStyle?: string;
-      primaryRole?: string;
-    };
-  }>('/', { preHandler: [requireAuth] }, async (req, reply) => {
+  app.post('/', { preHandler: [requireAuth, validateBody(createPlayerSchema)] }, async (req, reply) => {
+    const body = (req as any).validated;
     const [newPlayer] = await db.insert(player).values({
-      firstName: req.body.firstName,
-      lastName: req.body.lastName,
-      dateOfBirth: req.body.dateOfBirth,
-      battingStyle: req.body.battingStyle,
-      bowlingStyle: req.body.bowlingStyle,
-      primaryRole: req.body.primaryRole,
+      firstName: body.firstName,
+      lastName: body.lastName,
+      dateOfBirth: body.dateOfBirth,
+      battingStyle: body.battingStyle,
+      bowlingStyle: body.bowlingStyle,
+      primaryRole: body.primaryRole,
     }).returning();
     return reply.status(201).send(newPlayer);
   });

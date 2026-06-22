@@ -4,8 +4,14 @@ const SOCKET_URL = import.meta.env.VITE_WS_URL || '';
 
 let socket: Socket | null = null;
 
+function getAccessToken(): string | null {
+  return localStorage.getItem('access_token');
+}
+
 export function getSocket(): Socket {
   if (!socket) {
+    const token = getAccessToken();
+
     socket = io(SOCKET_URL, {
       autoConnect: false,
       reconnection: true,
@@ -13,6 +19,7 @@ export function getSocket(): Socket {
       reconnectionDelay: 1000,
       reconnectionDelayMax: 10000,
       transports: ['websocket', 'polling'],
+      auth: token ? { token } : undefined,
     });
   }
   return socket;

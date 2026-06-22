@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type CreateMatchInput } from '../lib/api';
 import type { Team } from '@cricket/shared';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -754,6 +755,8 @@ function StepReview({ state }: { state: WizardState }) {
 // ─── Main Page ──────────────────────────────────────────────────────────────
 
 export function CreateMatchPage() {
+  useDocumentTitle('New Match');
+
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
