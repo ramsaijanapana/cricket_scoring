@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-06-22T14:41:18.616Z
+- Updated: 2026-06-22T14:51:18.591Z
 - Branch: main
-- Head: 8bd7d31
-- Focus: P2 complete
+- Head: 094312b
+- Focus: repo cleanup
 
 ## Latest Summary
 
-- P2 sprint: 12 agents — prod deploy, Playwright, mobile tests, delivery integration, nginx hardening, shared schemas, socket auth, analytics SQL, register screen, README, document titles
+- Gitignore Playwright artifacts (test-results, playwright-report); removed local test-results/
 
 ## Next Steps
 
-- Run bash E2E with docker; wire Playwright into CI; commit P2
+- Continue P3 or run full E2E with docker
 
 ## Risks / Watchouts
 
@@ -27,35 +27,22 @@
 
 ## Verification
 
-- npm test 193/193
+- git clean except ignored paths
 
 ## Working Tree Snapshot
 
-- Changed files: 38
-- Staged files: 0
-- agent-context/state.json
-- .github/workflows/deploy.yml
-- README.md
-- apps/api/src/middleware/validation.ts
-- apps/api/src/routes/analytics.ts
-- apps/api/src/routes/players.ts
-- apps/api/src/routes/teams.ts
-- apps/mobile/app/_layout.tsx
-- apps/mobile/app/login.tsx
-- apps/mobile/package.json
-- apps/web/nginx.conf.template
-- apps/web/package.json
-- apps/web/src/lib/socket.ts
-- apps/web/src/pages/AnalyticsPage.tsx
-- apps/web/src/pages/CreateMatchPage.tsx
-- apps/web/src/pages/FantasyPage.tsx
-- apps/web/src/pages/FeedPage.tsx
-- apps/web/src/pages/HomePage.tsx
-- apps/web/src/pages/LoginPage.tsx
-- apps/web/src/pages/OverByOverPage.tsx
-- +18 more changed files
+- Changed files: 1
+- Staged files: 1
+- .gitignore
 
 ## Recent Checkpoints
+
+### 2026-06-22T14:51:18.591Z — repo cleanup
+
+- Actor: test
+- Summary: Gitignore Playwright artifacts (test-results, playwright-report); removed local test-results/
+- Next: Continue P3 or run full E2E with docker
+- Verified: git clean except ignored paths
 
 ### 2026-06-22T14:41:18.616Z — P2 complete
 
@@ -84,13 +71,6 @@
 - Summary: Web P2: per-route document titles via useDocumentTitle hook on all pages; match routes use team names when available
 - Next: Continue P2 sprint items
 - Verified: apps/web npm test 31/31
-
-### 2026-06-22T14:38:16.795Z — P2 production deploy
-
-- Actor: test
-- Summary: P2 production deploy: docker-compose.prod.yml GHCR images, deploy.yml mirrors staging (migrate, smoke /health, manual approval gate)
-- Next: Configure GitHub production environment secrets; force push or merge P1 branch
-- Verified: deploy.yml production job mirrors staging; docker-compose.prod.yml uses GHCR images
 
 ## Workflow Rule
 

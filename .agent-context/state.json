@@ -1,14 +1,14 @@
 {
   "project": "cricket_scoring",
-  "updatedAt": "2026-06-22T14:41:18.616Z",
+  "updatedAt": "2026-06-22T14:51:18.591Z",
   "branch": "main",
-  "head": "8bd7d31",
-  "currentFocus": "P2 complete",
+  "head": "094312b",
+  "currentFocus": "repo cleanup",
   "latestSummary": [
-    "P2 sprint: 12 agents — prod deploy, Playwright, mobile tests, delivery integration, nginx hardening, shared schemas, socket auth, analytics SQL, register screen, README, document titles"
+    "Gitignore Playwright artifacts (test-results, playwright-report); removed local test-results/"
   ],
   "nextSteps": [
-    "Run bash E2E with docker; wire Playwright into CI; commit P2"
+    "Continue P3 or run full E2E with docker"
   ],
   "risks": [
     "Interactive PowerShell may still fail on machines where npm.ps1 is blocked by execution policy even though npm works in non-interactive runners."
@@ -17,52 +17,36 @@
     "AGENTS.md, AGENT_HANDOFF.md, and .agent-context/state.json are the required handoff source of truth for future agents."
   ],
   "verification": [
-    "npm test 193/193"
+    "git clean except ignored paths"
   ],
   "workingTree": {
     "changedFiles": [
-      "agent-context/state.json",
-      ".github/workflows/deploy.yml",
-      "README.md",
-      "apps/api/src/middleware/validation.ts",
-      "apps/api/src/routes/analytics.ts",
-      "apps/api/src/routes/players.ts",
-      "apps/api/src/routes/teams.ts",
-      "apps/mobile/app/_layout.tsx",
-      "apps/mobile/app/login.tsx",
-      "apps/mobile/package.json",
-      "apps/web/nginx.conf.template",
-      "apps/web/package.json",
-      "apps/web/src/lib/socket.ts",
-      "apps/web/src/pages/AnalyticsPage.tsx",
-      "apps/web/src/pages/CreateMatchPage.tsx",
-      "apps/web/src/pages/FantasyPage.tsx",
-      "apps/web/src/pages/FeedPage.tsx",
-      "apps/web/src/pages/HomePage.tsx",
-      "apps/web/src/pages/LoginPage.tsx",
-      "apps/web/src/pages/OverByOverPage.tsx",
-      "apps/web/src/pages/RecordsPage.tsx",
-      "apps/web/src/pages/ScorecardPage.tsx",
-      "apps/web/src/pages/ScoringPage.tsx",
-      "apps/web/src/pages/SettingsPage.tsx",
-      "apps/web/src/pages/TournamentPage.tsx",
-      "docker-compose.prod.yml",
-      "package-lock.json",
-      "package.json",
-      "packages/shared/src/schemas/index.ts",
-      "apps/api/src/routes/deliveries.integration.test.ts",
-      "apps/mobile/app/register.tsx",
-      "apps/mobile/lib/api.test.ts",
-      "apps/mobile/vitest.config.ts",
-      "apps/web/e2e/scoring-smoke.spec.ts",
-      "apps/web/playwright.config.ts",
-      "apps/web/src/hooks/useDocumentTitle.ts",
-      "apps/web/src/lib/socket.test.ts",
-      "apps/web/test-results/.last-run.json"
+      ".gitignore"
     ],
-    "stagedFiles": []
+    "stagedFiles": [
+      ".gitignore"
+    ]
   },
   "recentCheckpoints": [
+    {
+      "updatedAt": "2026-06-22T14:51:18.591Z",
+      "actor": "test",
+      "focus": "repo cleanup",
+      "summary": [
+        "Gitignore Playwright artifacts (test-results, playwright-report); removed local test-results/"
+      ],
+      "nextSteps": [
+        "Continue P3 or run full E2E with docker"
+      ],
+      "risks": [],
+      "decisions": [],
+      "verification": [
+        "git clean except ignored paths"
+      ],
+      "changedFiles": [
+        ".gitignore"
+      ]
+    },
     {
       "updatedAt": "2026-06-22T14:41:18.616Z",
       "actor": "test",
@@ -443,46 +427,6 @@
         "apps/mobile/vitest.config.ts",
         "apps/web/e2e/scoring-smoke.spec.ts",
         "apps/web/playwright.config.ts",
-        "apps/web/src/hooks/useDocumentTitle.ts",
-        "apps/web/src/lib/socket.test.ts"
-      ]
-    },
-    {
-      "updatedAt": "2026-06-22T14:37:51.721Z",
-      "actor": "test",
-      "focus": "P2 mobile register",
-      "summary": [
-        "Mobile P2: register screen with registerSchema validation, auto-login after signup, linked from login modal"
-      ],
-      "nextSteps": [
-        "Remaining P2 mobile items; production deploy stub"
-      ],
-      "risks": [],
-      "decisions": [],
-      "verification": [
-        "mobile lint: no new errors in register.tsx/login.tsx (pre-existing nativewind tsc errors elsewhere)"
-      ],
-      "changedFiles": [
-        "agent-context/state.json",
-        "README.md",
-        "apps/api/src/middleware/validation.ts",
-        "apps/api/src/routes/players.ts",
-        "apps/api/src/routes/teams.ts",
-        "apps/mobile/app/_layout.tsx",
-        "apps/mobile/app/login.tsx",
-        "apps/mobile/package.json",
-        "apps/web/nginx.conf.template",
-        "apps/web/package.json",
-        "apps/web/src/lib/socket.ts",
-        "apps/web/src/pages/FeedPage.tsx",
-        "apps/web/src/pages/HomePage.tsx",
-        "docker-compose.prod.yml",
-        "package-lock.json",
-        "packages/shared/src/schemas/index.ts",
-        "apps/api/src/routes/deliveries.integration.test.ts",
-        "apps/mobile/app/register.tsx",
-        "apps/mobile/lib/api.test.ts",
-        "apps/mobile/vitest.config.ts",
         "apps/web/src/hooks/useDocumentTitle.ts",
         "apps/web/src/lib/socket.test.ts"
       ]

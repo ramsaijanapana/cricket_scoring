@@ -26,6 +26,8 @@ Thumbs.db
 .turbo/
 # Testing
 coverage/
+test-results/
+playwright-report/
 # Expo
 *.jks
 *.p8
