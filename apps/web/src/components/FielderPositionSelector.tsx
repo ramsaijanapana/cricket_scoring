@@ -75,9 +75,9 @@ export function FielderPositionSelector({
           cx="200"
           cy="200"
           r={FIELD_RADIUS}
-          fill="var(--color-green, #16a34a)"
+          fill="var(--color-green)"
           opacity="0.12"
-          stroke="var(--color-green, #16a34a)"
+          stroke="var(--color-green)"
           strokeWidth="2"
           opacity-stroke="0.4"
         />
@@ -88,7 +88,7 @@ export function FielderPositionSelector({
           cy="200"
           r={INNER_RING}
           fill="none"
-          stroke="var(--color-green, #16a34a)"
+          stroke="var(--color-green)"
           strokeWidth="1"
           strokeDasharray="6 4"
           opacity="0.35"
@@ -101,9 +101,9 @@ export function FielderPositionSelector({
           width="16"
           height="80"
           rx="2"
-          fill="var(--color-green, #16a34a)"
+          fill="var(--color-green)"
           opacity="0.25"
-          stroke="var(--color-green, #16a34a)"
+          stroke="var(--color-green)"
           strokeWidth="1"
           opacity-stroke="0.5"
         />

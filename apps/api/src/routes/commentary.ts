@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { commentary } from '../db/schema/index';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth';
 
 /**
@@ -21,8 +21,13 @@ export const commentaryRoutes: FastifyPluginAsync = async (app) => {
     const limit = parseInt(req.query.limit || '20', 10);
     const offset = (page - 1) * limit;
 
+    const conditions = [eq(commentary.matchId, req.params.id)];
+    if (req.query.lang) {
+      conditions.push(eq(commentary.language, req.query.lang));
+    }
+
     const results = await db.query.commentary.findMany({
-      where: eq(commentary.matchId, req.params.id),
+      where: and(...conditions),
       orderBy: [desc(commentary.publishedAt)],
       limit,
       offset,

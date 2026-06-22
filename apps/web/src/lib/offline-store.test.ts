@@ -106,4 +106,40 @@ describe('offlineStore', () => {
       expect(entry?.retryCount).toBe(5);
     });
   });
+
+  describe('scorecard cache', () => {
+    async function getScorecardEntry(matchId: string) {
+      const db = await openDB(DB_NAME, 1);
+      try {
+        return await db.get('scorecard_cache', matchId);
+      } finally {
+        db.close();
+      }
+    }
+
+    it('stores and retrieves a cached scorecard with timestamp', async () => {
+      const scorecard = [{ innings: { totalRuns: 120, totalWickets: 3 } }];
+      await offlineStore.cacheScorecard('match-1', scorecard);
+
+      const cached = await offlineStore.getCachedScorecard('match-1');
+
+      expect(cached?.scorecard).toEqual(scorecard);
+      expect(cached?.cachedAt).toEqual(expect.any(Number));
+
+      const entry = await getScorecardEntry('match-1');
+      expect(entry?.matchId).toBe('match-1');
+    });
+
+    it('returns null when no scorecard is cached', async () => {
+      expect(await offlineStore.getCachedScorecard('missing')).toBeNull();
+    });
+
+    it('overwrites an existing cached scorecard', async () => {
+      await offlineStore.cacheScorecard('match-1', [{ innings: { totalRuns: 50 } }]);
+      await offlineStore.cacheScorecard('match-1', [{ innings: { totalRuns: 75 } }]);
+
+      const cached = await offlineStore.getCachedScorecard('match-1');
+      expect(cached?.scorecard).toEqual([{ innings: { totalRuns: 75 } }]);
+    });
+  });
 });

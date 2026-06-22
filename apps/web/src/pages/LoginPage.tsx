@@ -5,6 +5,7 @@ import { LogIn } from 'lucide-react';
 import { api, setAuthToken, setRefreshToken, setUserId, parseJwtPayload } from '../lib/api';
 import { setSentryUser } from '../lib/sentry';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { Button, Card, Input } from '@cricket/ui';
 
 export function LoginPage() {
   useDocumentTitle('Login');
@@ -98,7 +99,7 @@ export function LoginPage() {
             </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="card gradient-strip-top space-y-5">
+          <form onSubmit={handleSubmit}><Card className="gradient-strip-top space-y-5">
             {error && (
               <motion.div
                 initial={{ opacity: 0, y: -4 }}
@@ -110,47 +111,32 @@ export function LoginPage() {
               </motion.div>
             )}
 
-            <div>
-              <label htmlFor="email" className="label">
-                Email
-              </label>
-              <input
-                id="email"
-                type="email"
-                autoComplete="email"
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="input"
-                disabled={loading}
-              />
-            </div>
-
-            <div>
-              <label htmlFor="password" className="label">
-                Password
-              </label>
-              <input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="input"
-                disabled={loading}
-              />
-            </div>
-
-            <motion.button
-              type="submit"
+            <Input
+              id="email"
+              label="Email"
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               disabled={loading}
-              className="btn-primary w-full py-3 text-sm font-bold disabled:opacity-60"
-              whileTap={{ scale: loading ? 1 : 0.98 }}
-            >
+            />
+
+            <Input
+              id="password"
+              label="Password"
+              type="password"
+              autoComplete="current-password"
+              placeholder="Password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+            />
+
+            <Button type="submit" disabled={loading} fullWidth className="py-3 text-sm font-bold">
               {loading ? 'Signing in…' : 'Sign In'}
-            </motion.button>
-          </form>
+            </Button>
+          </Card></form>
 
           <p className="text-center text-sm text-theme-tertiary mt-6">
             <Link to="/" className="hover:text-theme-primary transition-colors">

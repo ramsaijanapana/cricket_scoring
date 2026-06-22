@@ -6,7 +6,9 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
+  useWindowDimensions,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as Network from "expo-network";
 import { api, ApiError, type RecordDeliveryInput } from "../../../lib/api";
@@ -20,7 +22,10 @@ import {
 } from "../../../lib/socket";
 import {
   applyOptimisticDelivery,
+  reverseOptimisticDelivery,
   queueDelivery,
+  removeLastPendingDelivery,
+  queueUndo,
   getPendingCount,
   isOnline,
   refreshUndoStackPos,
@@ -95,7 +100,7 @@ function getScoringContext(match: any, currentInnings: any) {
 function buildDeliveryPayload(
   match: any,
   runs: number,
-  selectedExtra: string | null,
+  selectedExtra: RecordDeliveryInput["extra_type"],
   isWicket: boolean,
 ): RecordDeliveryInput | null {
   const currentInnings = getCurrentInnings(match);
@@ -116,6 +121,8 @@ function buildDeliveryPayload(
     is_wicket: isWicket,
     wicket_type: null,
     dismissed_player_id: null,
+    fielder_id: null,
+    is_dead_ball: false,
   };
 
   if (selectedExtra === "wide") {
@@ -141,12 +148,14 @@ export default function LiveScoringScreen() {
   const [match, setMatch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [selectedExtra, setSelectedExtra] = useState<string | null>(null);
+  const [selectedExtra, setSelectedExtra] = useState<RecordDeliveryInput["extra_type"]>(null);
   const [isWicket, setIsWicket] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [isConnected, setIsConnected] = useState(true);
   const unsubMatchEvent = useRef<(() => void) | null>(null);
   const undoStackPosRef = useRef(0);
+  const { width, height } = useWindowDimensions();
+  const isLandscape = width > height;
 
   const fetchMatch = useCallback(async () => {
     if (!id) return;
@@ -337,14 +346,34 @@ export default function LiveScoringScreen() {
     if (!id || !currentInnings?.id) return;
     hapticUndo();
     try {
+      const lastPayload = await removeLastPendingDelivery(id);
+      if (lastPayload) {
+        setMatch((current: any) => reverseOptimisticDelivery(current, lastPayload));
+        undoStackPosRef.current = Math.max(0, undoStackPosRef.current - 1);
+        await setUndoStackPos(id, undoStackPosRef.current);
+        await refreshPendingCount();
+        return;
+      }
+
+      const online = await isOnline();
+      if (!online) {
+        await queueUndo(id, currentInnings.id);
+        undoStackPosRef.current = Math.max(0, undoStackPosRef.current - 1);
+        await setUndoStackPos(id, undoStackPosRef.current);
+        Alert.alert("Offline", "Undo queued for sync when you reconnect.");
+        return;
+      }
+
       await api.undoLastBall(id, currentInnings.id);
+      undoStackPosRef.current = Math.max(0, undoStackPosRef.current - 1);
+      await setUndoStackPos(id, undoStackPosRef.current);
       await fetchMatch();
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to undo");
     }
   };
 
-  const handleExtraToggle = (value: string) => {
+  const handleExtraToggle = (value: NonNullable<RecordDeliveryInput["extra_type"]>) => {
     hapticTap();
     setSelectedExtra(selectedExtra === value ? null : value);
   };
@@ -376,8 +405,11 @@ export default function LiveScoringScreen() {
   const currentBowler = scoringContext?.bowler;
 
   return (
-    <View className="flex-1 bg-surface-900">
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 200 }}>
+    <View className={`flex-1 bg-surface-900${isLandscape ? " flex-row" : ""}`}>
+      <ScrollView
+        className={isLandscape ? "flex-1" : undefined}
+        contentContainerStyle={{ padding: 16, paddingBottom: isLandscape ? 16 : 200 }}
+      >
         {/* Connection / Offline status bar */}
         {(!isConnected || pendingCount > 0) && (
           <View
@@ -405,6 +437,16 @@ export default function LiveScoringScreen() {
             )}
           </View>
         )}
+
+        {!isLandscape && (
+          <View className="mb-3 flex-row items-center gap-2 rounded-lg border border-surface-700 bg-surface-800/80 px-3 py-2">
+            <Ionicons name="phone-landscape-outline" size={18} color={colors.surface[400]} />
+            <Text className="flex-1 text-xs text-surface-400">
+              Rotate to landscape for a wider scoring layout
+            </Text>
+          </View>
+        )}
+
 
         {/* Score display */}
         <View className="mb-4 items-center rounded-xl bg-surface-800 p-6">
@@ -496,8 +538,15 @@ export default function LiveScoringScreen() {
         </View>
       </ScrollView>
 
-      {/* Scoring pad - fixed at bottom */}
-      <View className="absolute bottom-0 left-0 right-0 border-t border-surface-700 bg-surface-850 px-4 pb-8 pt-4">
+      {/* Scoring pad */}
+      <View
+        className={
+          isLandscape
+            ? "justify-end border-l border-surface-700 bg-surface-850 px-3 pb-6 pt-4"
+            : "absolute bottom-0 left-0 right-0 border-t border-surface-700 bg-surface-850 px-4 pb-8 pt-4"
+        }
+        style={isLandscape ? { width: Math.min(width * 0.42, 420) } : undefined}
+      >
         {/* Extras toggle row */}
         <View className="mb-3 flex-row gap-2">
           {EXTRA_TYPES.map((extra) => (

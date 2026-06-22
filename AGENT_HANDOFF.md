@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-06-22T14:51:18.591Z
+- Updated: 2026-06-22T15:28:24.481Z
 - Branch: main
-- Head: 094312b
-- Focus: repo cleanup
+- Head: 90b56dd
+- Focus: P3 live commentary
 
 ## Latest Summary
 
-- Gitignore Playwright artifacts (test-results, playwright-report); removed local test-results/
+- P3 A++ sprint: shared UI kit, scoring refactor, match cache, API route tests, mobile offline/haptics tests, CI smoke/a11y, docs/metrics
 
 ## Next Steps
 
-- Continue P3 or run full E2E with docker
+- Monitor CI on main after push
 
 ## Risks / Watchouts
 
@@ -23,54 +23,74 @@
 
 ## Decisions
 
-- AGENTS.md, AGENT_HANDOFF.md, and .agent-context/state.json are the required handoff source of truth for future agents.
+- Axe scans fail on critical/serious only; keyboard shortcuts 0-6 runs, W wicket
 
 ## Verification
 
-- git clean except ignored paths
+- npm test: 309 passed (api 171, web 82, mobile 56)
 
 ## Working Tree Snapshot
 
-- Changed files: 1
-- Staged files: 1
-- .gitignore
+- Changed files: 136
+- Staged files: 0
+- agent-context/state.json
+- .env.example
+- .github/workflows/ci.yml
+- .github/workflows/deploy.yml
+- README.md
+- apps/api/.env.example
+- apps/api/src/config.ts
+- apps/api/src/db/index.ts
+- apps/api/src/middleware/metrics.ts
+- apps/api/src/middleware/pagination.ts
+- apps/api/src/routes/analytics.ts
+- apps/api/src/routes/commentary.ts
+- apps/api/src/server.ts
+- apps/api/src/services/notification-service.ts
+- apps/api/src/services/scoring-orchestrator.ts
+- apps/api/src/services/sentry.ts
+- apps/api/src/workers/notification-worker.ts
+- apps/mobile/app.json
+- apps/mobile/app/(tabs)/_layout.tsx
+- apps/mobile/app/(tabs)/chat.tsx
+- +116 more changed files
 
 ## Recent Checkpoints
 
-### 2026-06-22T14:51:18.591Z — repo cleanup
+### 2026-06-22T15:28:24.481Z — P3 live commentary
 
 - Actor: test
-- Summary: Gitignore Playwright artifacts (test-results, playwright-report); removed local test-results/
-- Next: Continue P3 or run full E2E with docker
-- Verified: git clean except ignored paths
+- Summary: P3 A++ sprint: shared UI kit, scoring refactor, match cache, API route tests, mobile offline/haptics tests, CI smoke/a11y, docs/metrics
+- Next: Monitor CI on main after push
+- Verified: npm test: 309 passed (api 171, web 82, mobile 56)
 
-### 2026-06-22T14:41:18.616Z — P2 complete
-
-- Actor: test
-- Summary: P2 sprint: 12 agents — prod deploy, Playwright, mobile tests, delivery integration, nginx hardening, shared schemas, socket auth, analytics SQL, register screen, README, document titles
-- Next: Run bash E2E with docker; wire Playwright into CI; commit P2
-- Verified: npm test 193/193
-
-### 2026-06-22T14:39:55.477Z — P2 analytics SQL
+### 2026-06-22T15:20:18.243Z — P3 live commentary
 
 - Actor: test
-- Summary: P2 analytics: wagon-wheel and worm-chart use SQL select/aggregation with LIMIT safeguards (5k/10k)
-- Next: P2: remaining analytics endpoints, Playwright E2E, production deploy stub
-- Verified: npm test 193/193 (api 152 + web 31 + mobile 10)
+- Summary: P3 web: CommentaryFeed auto-scroll, phase/lang URL filters, WS merge; CommentaryEditor save wired to API with cache invalidation; API lang filter on commentary route
+- Next: Continue P3 sprint; commit when ready
+- Verified: npm test 309/309 (api 171 + web 82 + mobile 56)
 
-### 2026-06-22T14:38:55.661Z — Web P2 Playwright E2E
-
-- Actor: test
-- Summary: Web P2: Playwright E2E smoke tests — scoring-smoke.spec.ts (home, login, create match); playwright.config.ts with vite webServer; @playwright/test devDep; test:e2e:playwright scripts in web + root
-- Next: P2 remaining items; wire Playwright into CI if desired
-- Verified: npm run test:e2e:playwright — 3/3 passed
-
-### 2026-06-22T14:38:23.375Z — Web P2 document titles
+### 2026-06-22T15:17:11.485Z — P3 accessibility auditor
 
 - Actor: test
-- Summary: Web P2: per-route document titles via useDocumentTitle hook on all pages; match routes use team names when available
-- Next: Continue P2 sprint items
-- Verified: apps/web npm test 31/31
+- Summary: P3 a11y: @axe-core/playwright e2e for Home/Login/Scoring; Layout/NotificationBell/ScoringPage modal+keyboard fixes; contrast tokens; CommentaryEditor syntax fix
+- Next: Continue P3 sprint or wire a11y into CI
+- Verified: Playwright 12/12; web vitest 82/82
+
+### 2026-06-22T15:16:26.155Z — P3 mobile polish
+
+- Actor: test
+- Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
+- Next: Continue P3 sprint agents; commit when ready
+- Verified: apps/mobile tsc clean; npm test 56/56
+
+### 2026-06-22T15:15:59.189Z — P3 contract unification
+
+- Actor: test
+- Summary: P3 contract unification: shared dtos.ts (MatchDetail, Paginated, RecordDeliveryInput, ScorecardSnapshot, RecordDeliveryResult); normalized WS events to snake_case + WS_EVENTS; web/mobile/api migrated off local scoring DTOs
+- Next: Other P3 agents; fix mobile haptics.test.ts parse error (unrelated)
+- Verified: shared build OK; api 171/171; web 82/82; mobile contract tests 40/40; root npm test blocked by haptics.test.ts syntax
 
 ## Workflow Rule
 

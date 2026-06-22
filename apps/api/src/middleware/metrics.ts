@@ -19,7 +19,6 @@ interface RouteMetric {
 const DURATION_BUCKETS = [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10];
 
 const routeMetrics = new Map<string, RouteMetric>();
-const dbQueryDurations: number[] = [];
 
 function getOrCreateRouteMetric(key: string): RouteMetric {
   let metric = routeMetrics.get(key);
@@ -42,42 +41,6 @@ function recordDuration(metric: RouteMetric, durationSec: number): void {
   for (const bucket of metric.buckets) {
     if (durationSec <= bucket.le) {
       bucket.count += 1;
-    }
-  }
-}
-
-// ── Drizzle query logger for DB duration tracking ───────────────────────────
-
-/**
- * Drizzle logger that records query durations for metrics.
- * Pass to drizzle({ logger: metricsQueryLogger }) to enable DB tracking.
- */
-export const metricsQueryLogger = {
-  logQuery(query: string, params: unknown[]): void {
-    // We track timing externally; this is for compatibility with Drizzle's logger interface
-    const start = performance.now();
-    // Note: Drizzle calls logQuery before execution. We record a placeholder
-    // and rely on the onResponse hook for actual HTTP timing. For DB-specific
-    // timing, use trackDbQuery() around individual calls.
-    void query;
-    void params;
-    void start;
-  },
-};
-
-/**
- * Wrap a DB call to track its duration for metrics.
- */
-export async function trackDbQuery<T>(fn: () => Promise<T>): Promise<T> {
-  const start = performance.now();
-  try {
-    return await fn();
-  } finally {
-    const durationMs = performance.now() - start;
-    dbQueryDurations.push(durationMs / 1000);
-    // Keep only last 10k entries to avoid memory leak
-    if (dbQueryDurations.length > 10_000) {
-      dbQueryDurations.splice(0, dbQueryDurations.length - 5_000);
     }
   }
 }
@@ -119,14 +82,7 @@ function serializeMetrics(): string {
     lines.push(`http_request_duration_seconds_count{${labels}} ${metric.count}`);
   }
 
-  // db_query_duration_seconds
-  if (dbQueryDurations.length > 0) {
-    const dbSum = dbQueryDurations.reduce((a, b) => a + b, 0);
-    lines.push('# HELP db_query_duration_seconds Database query duration in seconds');
-    lines.push('# TYPE db_query_duration_seconds summary');
-    lines.push(`db_query_duration_seconds_sum ${dbSum.toFixed(6)}`);
-    lines.push(`db_query_duration_seconds_count ${dbQueryDurations.length}`);
-  }
+  // db_query_duration_seconds is exported by serializeApmMetrics() (single histogram source)
 
   return lines.join('\n') + '\n';
 }

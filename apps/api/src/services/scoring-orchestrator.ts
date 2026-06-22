@@ -1,13 +1,15 @@
 import { db } from '../db/index';
 import { delivery, partnership, player, matchFormatConfig } from '../db/schema/index';
 import { match, matchTeam } from '../db/schema/match';
-import { teamFollow } from '../db/schema/follow';
 import { team } from '../db/schema/team';
 import { battingScorecard, bowlingScorecard } from '../db/schema/scorecard';
 import { broadcast } from './realtime';
-import { sendNotification } from './notification-service';
+import {
+  queueScoringEventFanout,
+  type ScoringNotificationPayload,
+} from './notification-service';
 import { cacheSet, cacheInvalidate } from './cache';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 import type { MilestoneEvent } from '@cricket/shared';
 import type { ScoringResult } from '../engine/scoring-engine';
 
@@ -125,13 +127,14 @@ async function detectAndBroadcastMilestones(
 }
 
 /**
- * Queue push notifications for scoring events to followers of the teams in this match.
+ * Enqueue a single BullMQ fan-out job for scoring notifications (wicket, milestone, match complete).
+ * Follower lookup and per-user delivery happen asynchronously in the notification worker.
  */
 async function queueScoringNotifications(
   matchId: string,
   deliveryRecord: typeof delivery.$inferSelect,
   postInningsScore: number,
-  preInningsScore: number,
+  _preInningsScore: number,
   matchCompleted: boolean,
 ): Promise<void> {
   const del = deliveryRecord;
@@ -149,31 +152,17 @@ async function queueScoringNotifications(
   const teamIds = matchTeams.map((t) => t.teamId);
   if (teamIds.length === 0) return;
 
-  const followers = await db
-    .select({ userId: teamFollow.userId })
-    .from(teamFollow)
-    .where(
-      teamIds.length === 1
-        ? eq(teamFollow.teamId, teamIds[0])
-        : sql`${teamFollow.teamId} IN (${sql.join(teamIds.map((id) => sql`${id}`), sql`, `)})`,
-    );
-
-  if (followers.length === 0) return;
-
-  const followerIds = [...new Set(followers.map((f) => f.userId))];
+  const payloads: ScoringNotificationPayload[] = [];
 
   if (del.isWicket) {
     const dismissedName = del.dismissedId ? await getPlayerName(del.dismissedId) : 'batsman';
     const bowlerName = await getPlayerName(del.bowlerId);
-    for (const fId of followerIds) {
-      sendNotification(
-        fId,
-        'wicket',
-        `Wicket! ${dismissedName} out`,
-        `${bowlerName} gets ${dismissedName}. ${teamNames} — ${postInningsScore}/${del.inningsWickets}`,
-        { matchId, type: 'wicket' },
-      );
-    }
+    payloads.push({
+      type: 'wicket',
+      title: `Wicket! ${dismissedName} out`,
+      body: `${bowlerName} gets ${dismissedName}. ${teamNames} — ${postInningsScore}/${del.inningsWickets}`,
+      data: { type: 'wicket' },
+    });
   }
 
   if (del.runsBatsman > 0) {
@@ -189,15 +178,12 @@ async function queueScoringNotifications(
       for (const threshold of BATSMAN_THRESHOLDS) {
         if (preRuns < threshold.runs && postRuns >= threshold.runs) {
           const name = await getPlayerName(del.strikerId);
-          for (const fId of followerIds) {
-            sendNotification(
-              fId,
-              'milestone',
-              `${threshold.label}! ${name}`,
-              `${name} reaches ${threshold.label} (${postRuns} runs) — ${teamNames}`,
-              { matchId, type: 'milestone', milestoneType: threshold.type },
-            );
-          }
+          payloads.push({
+            type: 'milestone',
+            title: `${threshold.label}! ${name}`,
+            body: `${name} reaches ${threshold.label} (${postRuns} runs) — ${teamNames}`,
+            data: { type: 'milestone', milestoneType: threshold.type },
+          });
           break;
         }
       }
@@ -205,16 +191,15 @@ async function queueScoringNotifications(
   }
 
   if (matchCompleted) {
-    for (const fId of followerIds) {
-      sendNotification(
-        fId,
-        'match_complete',
-        'Match Completed',
-        `${teamNames} — match has ended. ${matchRecord.resultSummary || 'Check scorecard for results.'}`,
-        { matchId, type: 'match_complete' },
-      );
-    }
+    payloads.push({
+      type: 'match_complete',
+      title: 'Match Completed',
+      body: `${teamNames} — match has ended. ${matchRecord.resultSummary || 'Check scorecard for results.'}`,
+      data: { type: 'match_complete' },
+    });
   }
+
+  await queueScoringEventFanout(matchId, teamIds, payloads);
 }
 
 // ─── Broadcast helpers ────────────────────────────────────────────────────────
@@ -265,10 +250,10 @@ async function broadcastWinPrediction(
   const projectedHigh = Math.round(currentScore + (remainingBalls / 6) * currentRunRate * 1.15);
 
   broadcast.prediction(matchId, {
-    winProbA: 100 - winProbChasing,
-    winProbB: winProbChasing,
-    projectedScoreLow: projectedLow,
-    projectedScoreHigh: projectedHigh,
+    win_prob_a: 100 - winProbChasing,
+    win_prob_b: winProbChasing,
+    projected_score_low: projectedLow,
+    projected_score_high: projectedHigh,
   });
 }
 
@@ -284,20 +269,20 @@ async function broadcastDeliveryUpdate(matchId: string, result: ScoringResult): 
 
     broadcast.wicket(matchId, {
       delivery: result.delivery as any,
-      wicketDetail: {
-        wicketType: result.delivery.wicketType as any,
-        dismissedId: result.delivery.dismissedId!,
-        bowlerId: result.delivery.bowlerId,
-        fielderIds: (result.delivery.fielderIds || []) as string[],
+      wicket_detail: {
+        wicket_type: result.delivery.wicketType as any,
+        dismissed_id: result.delivery.dismissedId!,
+        bowler_id: result.delivery.bowlerId,
+        fielder_ids: (result.delivery.fielderIds || []) as string[],
         text: `${result.delivery.wicketType}`,
       },
       commentary: result.commentary,
-      partnershipEnded: endedPartnership as any,
+      partnership_ended: endedPartnership as any,
     });
   } else {
     broadcast.delivery(matchId, {
       delivery: result.delivery as any,
-      scorecardSnapshot: result.scorecardSnapshot as any,
+      scorecard_snapshot: result.scorecardSnapshot as any,
       commentary: result.commentary,
     });
   }
@@ -311,21 +296,21 @@ async function broadcastDeliveryUpdate(matchId: string, result: ScoringResult): 
     });
 
     broadcast.over(matchId, {
-      overSummary: {
-        overNum: result.delivery.overNum,
+      over_summary: {
+        over_num: result.delivery.overNum,
         runs: result.delivery.totalRuns,
         wickets: result.delivery.isWicket ? 1 : 0,
         maidens: result.delivery.totalRuns === 0,
         extras: result.delivery.runsExtras,
       },
-      bowlerStats: {
-        bowlerId: result.delivery.bowlerId,
+      bowler_stats: {
+        bowler_id: result.delivery.bowlerId,
         overs: bowlerCard ? parseFloat(bowlerCard.oversBowled) : 0,
         runs: bowlerCard?.runsConceded ?? 0,
         wickets: bowlerCard?.wicketsTaken ?? 0,
         economy: bowlerCard?.economyRate ? parseFloat(bowlerCard.economyRate) : 0,
       },
-      runRate: result.scorecardSnapshot.run_rate,
+      run_rate: result.scorecardSnapshot.run_rate,
     });
   }
 }

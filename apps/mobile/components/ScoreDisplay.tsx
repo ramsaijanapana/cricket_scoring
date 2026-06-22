@@ -65,7 +65,7 @@ export function MatchScoreHeader({
   currentBattingTeam,
   result,
 }: MatchScoreHeaderProps) {
-  const statusColor = statusColors[status] || colors.surface[400];
+  const statusColor = statusColors[status as keyof typeof statusColors] ?? colors.surface[400];
 
   return (
     <View className="rounded-xl bg-surface-800 p-4">

@@ -19,8 +19,8 @@
 
     --text-primary: #0a0a0a;
     --text-secondary: #404040;
-    --text-tertiary: #737373;
-    --text-muted: #a3a3a3;
+    --text-tertiary: #525252;
+    --text-muted: #737373;
 
     --border-subtle: rgba(0, 0, 0, 0.06);
     --border-medium: rgba(0, 0, 0, 0.12);
@@ -42,7 +42,7 @@
     /* Nav active */
     --nav-active-bg: rgba(0, 0, 0, 0.06);
     --nav-active-text: #0a0a0a;
-    --nav-text: #737373;
+    --nav-text: #525252;
     --nav-hover-text: #404040;
     --nav-hover-bg: rgba(0, 0, 0, 0.04);
 
@@ -71,16 +71,16 @@
 
     /* Input text */
     --input-text: #0a0a0a;
-    --input-placeholder: #a3a3a3;
+    --input-placeholder: #737373;
 
     /* Label */
-    --label-text: #737373;
+    --label-text: #525252;
 
     /* Divider */
     --divider-border: rgba(0, 0, 0, 0.06);
 
     /* Cricket colors — same in both modes */
-    --color-green: #16a34a;
+    --color-green: #15803d;
     --color-gold: #eab308;
     --color-red: #ef4444;
     --color-blue: #3b82f6;
@@ -217,11 +217,12 @@
   }
 
   .btn-primary {
-    @apply bg-cricket-green text-white font-semibold px-5 py-3 rounded-xl transition-all duration-150 shadow-sm;
+    @apply text-white font-semibold px-5 py-3 rounded-xl transition-all duration-150 shadow-sm;
+    background-color: #15803d;
   }
   .btn-primary:hover {
-    @apply bg-cricket-green-light;
-    box-shadow: 0 0 20px rgba(22, 163, 74, 0.15);
+    background-color: #166534;
+    box-shadow: 0 0 20px rgba(21, 128, 61, 0.15);
   }
   .btn-primary:active {
     transform: scale(0.97);
@@ -391,7 +392,7 @@
   .surface-muted {
     background: var(--bg-input);
     border: 1px solid var(--border-subtle);
-    color: var(--text-muted);
+    color: var(--text-secondary);
   }
   .surface-muted:hover {
     background: var(--bg-hover);
@@ -590,14 +591,14 @@
 
   /* Bold green-to-emerald gradient background for hero sections */
   .hero-gradient {
-    background: linear-gradient(135deg, #16a34a 0%, #059669 50%, #0d9488 100%);
+    background: linear-gradient(135deg, var(--color-green) 0%, #059669 50%, #0d9488 100%);
   }
 
   /* Extra large score display with gradient text */
   .score-big {
     @apply text-5xl font-black tracking-tighter leading-none;
     font-variant-numeric: tabular-nums;
-    background: linear-gradient(135deg, #16a34a, #059669, #10b981);
+    background: linear-gradient(135deg, var(--color-green), #059669, #10b981);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -625,7 +626,7 @@
     bottom: 0;
     width: 4px;
     border-radius: 4px 0 0 4px;
-    background: linear-gradient(180deg, #16a34a, #059669);
+    background: linear-gradient(180deg, var(--color-green), #059669);
   }
 
   /* Subtle green tinted background for highlighted stats */
@@ -637,7 +638,7 @@
 
   /* Gradient text utility */
   .text-gradient-green {
-    background: linear-gradient(135deg, #16a34a, #059669);
+    background: linear-gradient(135deg, var(--color-green), #059669);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
@@ -655,7 +656,7 @@
     right: 0;
     height: 3px;
     border-radius: 1rem 1rem 0 0;
-    background: linear-gradient(90deg, #16a34a, #059669, #10b981);
+    background: linear-gradient(90deg, var(--color-green), #059669, #10b981);
   }
 
   /* Header gradient bottom line */
@@ -806,13 +807,13 @@
   /* Score display */
   .score-big {
     background: none !important;
-    -webkit-text-fill-color: #16a34a !important;
-    color: #16a34a !important;
+    -webkit-text-fill-color: var(--color-green) !important;
+    color: var(--color-green) !important;
     font-size: 24pt !important;
   }
 
   /* Milestone colors for print */
-  .text-cricket-green { color: #16a34a !important; }
+  .text-cricket-green { color: var(--color-green) !important; }
   .text-cricket-red { color: #ef4444 !important; }
   .text-cricket-gold { color: #b8860b !important; }
 
@@ -834,7 +835,7 @@
     text-align: center;
     margin-bottom: 12pt;
     padding-bottom: 8pt;
-    border-bottom: 2pt solid #16a34a;
+    border-bottom: 2pt solid var(--color-green);
   }
 
   /* Ensure tabular nums still work */

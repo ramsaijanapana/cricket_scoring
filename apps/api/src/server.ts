@@ -177,7 +177,7 @@ async function buildApp() {
       status: 'ok',
       timestamp: new Date().toISOString(),
       uptime: `${Math.floor(process.uptime())}s`,
-      version: process.env.APP_VERSION || process.env.npm_package_version || '0.0.0',
+      version: env.APP_VERSION,
     };
 
     // Check database

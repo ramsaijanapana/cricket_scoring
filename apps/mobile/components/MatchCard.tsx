@@ -1,10 +1,11 @@
 import { View, Text, Pressable } from "react-native";
 import { useRouter } from "expo-router";
-import { colors, statusColors, formatLabels } from "../lib/theme";
+import { formatLabels } from "../lib/theme";
+import { MatchStatusPill } from "@cricket/ui";
 
 interface MatchCardTeam {
   name: string;
-  shortName?: string;
+  shortName?: string | null;
   score?: number;
   wickets?: number;
   overs?: string;
@@ -32,7 +33,6 @@ export function MatchCard({
   scheduledAt,
 }: MatchCardProps) {
   const router = useRouter();
-  const statusColor = statusColors[status] || colors.surface[400];
   const isLive = status === "live";
 
   const handlePress = () => {
@@ -49,14 +49,7 @@ export function MatchCard({
       {/* Header: status + format */}
       <View className="mb-3 flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
-          <View
-            className="rounded-full px-2 py-0.5"
-            style={{ backgroundColor: statusColor }}
-          >
-            <Text className="text-xs font-bold uppercase text-white">
-              {isLive ? "LIVE" : status.replace("_", " ")}
-            </Text>
-          </View>
+          <MatchStatusPill status={status} />
           <Text className="text-xs font-medium text-surface-400">
             {formatLabels[format] || format.toUpperCase()}
           </Text>

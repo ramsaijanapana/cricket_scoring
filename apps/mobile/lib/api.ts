@@ -9,7 +9,11 @@ import type {
   BattingScorecard,
   BowlingScorecard,
   Commentary,
+  Paginated,
+  RecordDeliveryInput,
 } from "@cricket/shared";
+
+export type { RecordDeliveryInput };
 
 // ─── Response types ─────────────────────────────────────────────────────────
 
@@ -53,9 +57,15 @@ interface ApiMatchRaw extends Match {
 }
 
 /** Enriched match returned by the API with joined team and score data */
+export interface MatchTeamSummary {
+  id: string;
+  name: string;
+  shortName?: string | null;
+}
+
 export interface MatchWithTeams extends Match {
-  teamA?: Team & { shortName?: string | null };
-  teamB?: Team & { shortName?: string | null };
+  teamA?: MatchTeamSummary;
+  teamB?: MatchTeamSummary;
   teamAScore?: {
     totalRuns: number;
     totalWickets: number;
@@ -85,44 +95,6 @@ export interface InningsScorecard {
   battingTeamName?: string;
   bowlingTeamName?: string;
   extras: InningsExtras;
-}
-
-export interface RecordDeliveryInput {
-  innings_num: number;
-  bowler_id: string;
-  striker_id: string;
-  non_striker_id: string;
-  runs_batsman: number;
-  runs_extras?: number;
-  extra_type?: "wide" | "noball" | "bye" | "legbye" | "penalty" | null;
-  is_wicket?: boolean;
-  wicket_type?:
-    | "bowled"
-    | "caught"
-    | "lbw"
-    | "run_out"
-    | "stumped"
-    | "hit_wicket"
-    | "obstructing"
-    | "timed_out"
-    | "handled_ball"
-    | "retired_hurt"
-    | null;
-  dismissed_player_id?: string | null;
-  fielder_id?: string | null;
-  is_dead_ball?: boolean;
-  expected_stack_pos?: number;
-  client_id?: string;
-}
-
-interface PaginatedResponse<T> {
-  data: T[];
-  pagination?: {
-    page: number;
-    limit: number;
-    total?: number;
-    totalPages?: number;
-  };
 }
 
 function normalizeAuthResponse(raw: ApiAuthResponse): AuthResponse {
@@ -201,7 +173,7 @@ function normalizeMatch(raw: ApiMatchRaw): MatchWithTeams {
   return { ...raw, teamA, teamB, teamAScore, teamBScore };
 }
 
-function unwrapPaginated<T>(payload: T[] | PaginatedResponse<T>): T[] {
+function unwrapPaginated<T>(payload: T[] | Paginated<T>): T[] {
   if (Array.isArray(payload)) return payload;
   return payload.data ?? [];
 }
@@ -307,7 +279,7 @@ export const api = {
 
   // Matches
   getMatches: async () => {
-    const raw = await request<MatchWithTeams[] | PaginatedResponse<ApiMatchRaw>>(
+    const raw = await request<MatchWithTeams[] | Paginated<ApiMatchRaw>>(
       "/matches",
     );
     return unwrapPaginated(raw).map(normalizeMatch);
@@ -359,7 +331,7 @@ export const api = {
 
   // Teams
   getTeams: async () => {
-    const raw = await request<Team[] | PaginatedResponse<Team>>("/teams");
+    const raw = await request<Team[] | Paginated<Team>>("/teams");
     return unwrapPaginated(raw);
   },
   createTeam: (data: { name: string; shortName?: string; country?: string; teamType?: string }) =>
@@ -367,7 +339,7 @@ export const api = {
 
   // Players
   getPlayers: async () => {
-    const raw = await request<Player[] | PaginatedResponse<Player>>("/players");
+    const raw = await request<Player[] | Paginated<Player>>("/players");
     return unwrapPaginated(raw);
   },
   getPlayer: (id: string) => request<Player>(`/players/${id}`),
@@ -406,7 +378,7 @@ export const api = {
   getScorecard: (matchId: string) =>
     request<InningsScorecard[]>(`/matches/${matchId}/scorecard`),
   getCommentary: (matchId: string, page = 1) =>
-    request<PaginatedResponse<Commentary>>(`/matches/${matchId}/commentary?page=${page}`),
+    request<Paginated<Commentary>>(`/matches/${matchId}/commentary?page=${page}`),
 
   // Innings
   createInnings: (matchId: string, data: { battingTeamId: string; bowlingTeamId: string; inningsNumber: number }) =>
@@ -448,9 +420,9 @@ export const api = {
 
   // Chat
   getChatRooms: (page = 1) =>
-    request<PaginatedResponse<unknown>>(`/chat/rooms?page=${page}`),
+    request<Paginated<unknown>>(`/chat/rooms?page=${page}`),
   getChatMessages: (roomId: string, page = 1) =>
-    request<PaginatedResponse<unknown>>(
+    request<Paginated<unknown>>(
       `/chat/rooms/${roomId}/messages?page=${page}`,
     ),
   sendChatMessage: (roomId: string, data: { content: string; messageType?: string; replyToId?: string }) =>

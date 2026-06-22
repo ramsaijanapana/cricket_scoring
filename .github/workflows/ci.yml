@@ -133,6 +133,7 @@ jobs:
           cache: "npm"
       - run: npm ci
       - run: npm run db:migrate
+      - run: npm run db:seed
       - run: npx turbo build --filter=@cricket/api
       - name: Start API
         run: npm run start --workspace=@cricket/api &
@@ -148,3 +149,21 @@ jobs:
           echo "API failed to become healthy"
           exit 1
       - run: npm run test:e2e:all
+
+  playwright:
+    name: Playwright
+    runs-on: ubuntu-latest
+    needs: [lint, typecheck]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+      - run: npm ci
+      - name: Install Playwright browsers
+        run: npx playwright install --with-deps chromium
+        working-directory: apps/web
+      - run: npm run test:e2e:playwright:smoke
+        env:
+          CI: true

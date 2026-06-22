@@ -1,14 +1,25 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Download, History, Loader2, RefreshCw } from 'lucide-react';
+import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Download, History, Loader2, RefreshCw, Link2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { CommentaryFeed } from '../components/CommentaryFeed';
 import { MatchChat } from '../components/MatchChat';
 import { AuditLogPanel } from '../components/AuditLogPanel';
 import { SpectatorBadge } from '../components/SpectatorBadge';
+import { StaleDataBadge } from '../components/StaleDataBadge';
+import { KeyMomentsPanel } from '../components/KeyMomentsPanel';
+import { PartnershipChart } from '../components/charts/PartnershipChart';
+import {
+  buildKeyMomentsFromAudit,
+  buildKeyMomentsFromCommentary,
+  buildKeyMomentsFromScorecard,
+  mergeKeyMoments,
+} from '../lib/keyMoments';
+import { buildPlayerNameMap, mapPartnershipsForChart } from '../lib/partnershipUtils';
 import { useDocumentTitle, matchDocumentTitle } from '../hooks/useDocumentTitle';
+import { useScorecardWithCache } from '../hooks/useScorecardWithCache';
 
 const inningsContainerVariants = {
   hidden: {},
@@ -50,17 +61,50 @@ export function ScorecardPage() {
   const [activeTab, setActiveTab] = useState<ScorecardTab>('scorecard');
   const [pdfLoading, setPdfLoading] = useState(false);
 
-  const { data: scorecard, isLoading, isError, refetch } = useQuery({
-    queryKey: ['scorecard', matchId],
-    queryFn: () => api.getScorecard(matchId!),
-    enabled: !!matchId,
-  });
+  const { data: scorecardResult, isLoading, isError, refetch } = useScorecardWithCache(matchId);
+  const scorecard = scorecardResult?.scorecard;
+  const isStale = scorecardResult?.isStale ?? false;
+  const cachedAt = scorecardResult?.cachedAt ?? null;
 
   const { data: matchData } = useQuery({
     queryKey: ['match', matchId],
     queryFn: () => api.getMatch(matchId!),
     enabled: !!matchId,
   });
+
+  const { data: commentaryData } = useQuery({
+    queryKey: ['commentary', matchId, 'key-moments'],
+    queryFn: () => api.getCommentary(matchId!, 1),
+    enabled: !!matchId && !!scorecard?.length,
+  });
+
+  const { data: auditData } = useQuery({
+    queryKey: ['audit-log', matchId, 'key-moments'],
+    queryFn: () => api.getAuditLog(matchId!),
+    enabled: !!matchId && !!scorecard?.length,
+    retry: false,
+  });
+
+  const { data: partnershipData } = useQuery({
+    queryKey: ['partnerships', matchId],
+    queryFn: () => api.getPartnerships(matchId!),
+    enabled: !!matchId && !!scorecard?.length,
+  });
+
+  const playerNameMap = useMemo(
+    () => buildPlayerNameMap(scorecard ?? []),
+    [scorecard],
+  );
+
+  const keyMoments = useMemo(
+    () =>
+      mergeKeyMoments(
+        buildKeyMomentsFromScorecard(scorecard ?? []),
+        buildKeyMomentsFromCommentary(commentaryData?.data ?? []),
+        buildKeyMomentsFromAudit(auditData?.data ?? []),
+      ),
+    [scorecard, commentaryData, auditData],
+  );
 
   useDocumentTitle(matchDocumentTitle(matchData?.teams, 'Scorecard'));
 
@@ -160,12 +204,13 @@ export function ScorecardPage() {
         initial={{ opacity: 0, x: -10 }}
         animate={{ opacity: 1, x: 0 }}
         transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-        className="mb-4 flex items-center"
+        className="mb-4 flex items-center gap-2"
       >
         <Link to="/" className="inline-flex items-center gap-1.5 text-sm text-theme-tertiary hover:text-theme-primary transition-colors min-h-0 min-w-0 py-1">
           <ArrowLeft size={16} />
           <span>Back to Matches</span>
         </Link>
+        {isStale && cachedAt != null && <StaleDataBadge cachedAt={cachedAt} />}
         <motion.button
           whileHover={{ scale: 1.03 }}
           whileTap={{ scale: 0.97 }}
@@ -272,7 +317,7 @@ export function ScorecardPage() {
                 animate={{ opacity: 1 }}
                 transition={{ delay: 0.3 }}
                 className="text-cricket-green text-sm font-semibold mt-3 inline-block px-4 py-1.5 rounded-full"
-                style={{ background: 'rgba(22, 163, 74, 0.08)' }}
+                style={{ background: 'color-mix(in srgb, var(--color-green) 8%, transparent)' }}
               >
                 {matchData.resultSummary}
               </motion.p>
@@ -331,7 +376,8 @@ export function ScorecardPage() {
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
           >
-            {/* Innings scorecards */}
+            {/* Key moments + innings scorecards */}
+            <KeyMomentsPanel moments={keyMoments} />
             <motion.div
               variants={inningsContainerVariants}
               initial="hidden"
@@ -340,7 +386,15 @@ export function ScorecardPage() {
             >
               {scorecard.map((inningsData: any, idx: number) => (
                 <motion.div key={idx} variants={inningsCardVariants}>
-                  <InningsScorecard data={inningsData} inningsNumber={idx + 1} />
+                  <InningsScorecard
+                    data={inningsData}
+                    inningsNumber={idx + 1}
+                    partnershipRows={mapPartnershipsForChart(
+                      partnershipData ?? [],
+                      inningsData.innings?.id,
+                      playerNameMap,
+                    )}
+                  />
                 </motion.div>
               ))}
             </motion.div>
@@ -386,7 +440,15 @@ export function ScorecardPage() {
   );
 }
 
-function InningsScorecard({ data, inningsNumber }: { data: any; inningsNumber: number }) {
+function InningsScorecard({
+  data,
+  inningsNumber,
+  partnershipRows,
+}: {
+  data: any;
+  inningsNumber: number;
+  partnershipRows: ReturnType<typeof mapPartnershipsForChart>;
+}) {
   const ordinal = ['', '1st', '2nd', '3rd', '4th'][inningsNumber] || `${inningsNumber}th`;
 
   const activeBatters = data.batting.filter((b: any) => !b.didNotBat);
@@ -445,7 +507,7 @@ function InningsScorecard({ data, inningsNumber }: { data: any; inningsNumber: n
               const isMilestone = batter.runsScored >= 50;
               const isCentury = batter.runsScored >= 100;
               const milestoneStyle = isCentury
-                ? { borderLeft: '3px solid #16a34a' }
+                ? { borderLeft: '3px solid var(--color-green)' }
                 : isMilestone
                 ? { borderLeft: '3px solid #eab308' }
                 : {};
@@ -554,6 +616,19 @@ function InningsScorecard({ data, inningsNumber }: { data: any; inningsNumber: n
               </motion.span>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Partnership timeline */}
+      {partnershipRows.length > 0 && (
+        <div className="mt-4 rounded-xl p-4" style={{ background: 'var(--bg-hover)' }}>
+          <div className="flex items-center gap-2 mb-3">
+            <Link2 size={13} className="text-cricket-green" />
+            <p className="text-[10px] font-bold text-theme-muted uppercase tracking-widest">
+              Partnership Timeline
+            </p>
+          </div>
+          <PartnershipChart data={partnershipRows} />
         </div>
       )}
 

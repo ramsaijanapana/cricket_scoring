@@ -29,7 +29,7 @@ services:
     command: ["node", "dist/db/migrate.js"]
     restart: "no"
 
-  # ── API Server ─────────────────────────────────────────────────────────────
+  # ── API Server (internal only — proxied via web/nginx) ─────────────────────
   api:
     image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:?IMAGE_PREFIX is required}/api:${IMAGE_TAG:-latest}
     container_name: cricscore_api
@@ -53,8 +53,6 @@ services:
       S3_REGION: ${S3_REGION:-us-east-1}
       S3_ENDPOINT: ${S3_ENDPOINT:-}
       S3_CDN_URL: ${S3_CDN_URL:-}
-    ports:
-      - "${API_PORT:-3001}:3001"
     networks:
       - internal
       - external

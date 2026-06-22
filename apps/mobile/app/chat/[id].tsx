@@ -44,7 +44,7 @@ export default function ChatRoomScreen() {
       try {
         const res = await api.getChatMessages(id, pageNum);
         // API returns messages in descending order; reverse for display (oldest first)
-        const sorted = [...res.data].reverse();
+        const sorted = [...(res.data as Message[])].reverse();
         if (append) {
           setMessages((prev) => [...sorted, ...prev]);
         } else {
@@ -71,7 +71,7 @@ export default function ChatRoomScreen() {
     setSending(true);
     setText("");
     try {
-      const msg = await api.sendChatMessage(id, { content });
+      const msg = (await api.sendChatMessage(id, { content })) as Message;
       setMessages((prev) => [...prev, { ...msg, senderName: null, senderAvatar: null }]);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     } catch {

@@ -14,18 +14,17 @@ import { storage } from "../../lib/storage";
 import { api } from "../../lib/api";
 import { useRouter } from "expo-router";
 
-interface UserProfile {
-  id: string;
-  displayName: string | null;
-  email: string | null;
-  bio: string | null;
-  city: string | null;
-  country: string | null;
-  primaryRole: string | null;
-  battingStyle: string | null;
-  bowlingStyle: string | null;
-  avatarUrl: string | null;
-  isPublic: boolean;
+import type { AppUser } from "@cricket/shared";
+
+interface UserProfile extends AppUser {
+  bio?: string | null;
+  city?: string | null;
+  country?: string | null;
+  primaryRole?: string | null;
+  battingStyle?: string | null;
+  bowlingStyle?: string | null;
+  avatarUrl?: string | null;
+  isPublic?: boolean;
 }
 
 interface SettingsRowProps {
@@ -108,14 +107,15 @@ export default function ProfileScreen() {
   const fetchProfile = useCallback(async () => {
     try {
       const data = await api.getMyProfile();
-      setProfile(data);
+      const profileData: UserProfile = { ...data };
+      setProfile(profileData);
       setEditData({
-        city: data.city || "",
-        country: data.country || "",
-        primaryRole: data.primaryRole || "",
-        battingStyle: data.battingStyle || "",
-        bowlingStyle: data.bowlingStyle || "",
-        bio: data.bio || "",
+        city: profileData.city || "",
+        country: profileData.country || "",
+        primaryRole: profileData.primaryRole || "",
+        battingStyle: profileData.battingStyle || "",
+        bowlingStyle: profileData.bowlingStyle || "",
+        bio: profileData.bio || "",
       });
       setIsGuest(false);
     } catch {

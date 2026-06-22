@@ -21,7 +21,13 @@ export function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const navigate = useNavigate();
+
+  const closeDropdown = useCallback(() => {
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  }, []);
 
   // Fetch unread count on mount
   useEffect(() => {
@@ -61,6 +67,42 @@ export function NotificationBell() {
     }
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
+
+  // Escape to close + focus trap while open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeDropdown();
+        return;
+      }
+
+      if (e.key === 'Tab' && dropdownRef.current) {
+        const focusable = dropdownRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKey);
+    requestAnimationFrame(() => {
+      const firstItem = dropdownRef.current?.querySelector<HTMLElement>('button, [href]');
+      firstItem?.focus();
+    });
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [isOpen, closeDropdown]);
 
   const toggleDropdown = useCallback(async () => {
     const willOpen = !isOpen;
@@ -128,13 +170,15 @@ export function NotificationBell() {
   return (
     <div ref={dropdownRef} className="relative">
       <motion.button
+        ref={triggerRef}
+        type="button"
         onClick={toggleDropdown}
         className="flex items-center justify-center w-9 h-9 min-h-0 min-w-0 rounded-xl transition-colors duration-200 text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)] relative"
         whileTap={{ scale: 0.9 }}
         title="Notifications"
         aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
       >
-        <Bell size={16} />
+        <Bell size={16} aria-hidden="true" />
         <AnimatePresence>
           {unreadCount > 0 && (
             <motion.span
@@ -142,6 +186,7 @@ export function NotificationBell() {
               animate={{ scale: 1 }}
               exit={{ scale: 0 }}
               className="absolute -top-0.5 -right-0.5 flex items-center justify-center min-w-[16px] h-4 px-1 text-[10px] font-bold text-white bg-red-500 rounded-full leading-none"
+              aria-hidden="true"
             >
               {unreadCount > 99 ? '99+' : unreadCount}
             </motion.span>
@@ -152,6 +197,9 @@ export function NotificationBell() {
       <AnimatePresence>
         {isOpen && (
           <motion.div
+            id="notification-dropdown"
+            role="region"
+            aria-label="Notifications"
             initial={{ opacity: 0, y: -8, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.95 }}
@@ -165,7 +213,9 @@ export function NotificationBell() {
               </span>
               {unreadCount > 0 && (
                 <button
+                  type="button"
                   onClick={markAllRead}
+                  aria-label="Mark all notifications as read"
                   className="text-xs text-cricket-green hover:underline"
                 >
                   Mark all read
@@ -174,7 +224,7 @@ export function NotificationBell() {
             </div>
 
             {/* Notification list */}
-            <div className="overflow-y-auto max-h-72">
+            <div className="overflow-y-auto max-h-72" role="list" aria-live="polite">
               {loading && (
                 <div className="flex items-center justify-center py-8 text-sm text-[var(--text-muted)]">
                   Loading...
@@ -191,14 +241,17 @@ export function NotificationBell() {
                 notifications.map((notif) => (
                   <button
                     key={notif.id}
+                    type="button"
+                    role="listitem"
                     onClick={() => handleNotificationClick(notif)}
+                    aria-label={`${notif.title}${notif.read ? '' : ', unread'}${notif.body ? `. ${notif.body}` : ''}`}
                     className={`w-full text-left px-4 py-3 border-b border-[var(--border-subtle)] hover:bg-[var(--bg-hover)] transition-colors duration-150 ${
                       !notif.read ? 'bg-cricket-green/5' : ''
                     }`}
                   >
                     <div className="flex items-start gap-2">
                       {!notif.read && (
-                        <span className="mt-1.5 w-2 h-2 rounded-full bg-cricket-green shrink-0" />
+                        <span className="mt-1.5 w-2 h-2 rounded-full bg-cricket-green shrink-0" aria-hidden="true" />
                       )}
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-medium text-[var(--text-primary)] truncate">

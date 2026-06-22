@@ -203,6 +203,8 @@ export function ScoringPage() {
 
   const wicketModalRef = useRef<HTMLDivElement>(null);
   const firstFocusableRef = useRef<HTMLButtonElement>(null);
+  const newBatsmanModalRef = useRef<HTMLDivElement>(null);
+  const newBatsmanCloseRef = useRef<HTMLButtonElement>(null);
 
   // Fetch match data
   const { data: matchData, isLoading } = useQuery({
@@ -596,6 +598,68 @@ export function ScoringPage() {
     return () => document.removeEventListener('keydown', handleKey);
   }, [showWicketModal]);
 
+  // New batsman modal: close on Escape + focus trap
+  useEffect(() => {
+    if (!showNewBatsmanModal) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowNewBatsmanModal(false);
+        setDismissedPlayerId(null);
+      }
+      if (e.key === 'Tab' && newBatsmanModalRef.current) {
+        const focusable = newBatsmanModalRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    document.addEventListener('keydown', handleKey);
+    requestAnimationFrame(() => newBatsmanCloseRef.current?.focus());
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [showNewBatsmanModal]);
+
+  // Keyboard scoring shortcuts (0–6 runs, W wicket) when no modal is open
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (showWicketModal || showNewBatsmanModal || showBowlerSelect) return;
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) return;
+
+      const key = e.key.toLowerCase();
+      if (key === 'w') {
+        if (inningsCompleted || matchCompleted || pendingBowlerChange) return;
+        e.preventDefault();
+        setShowWicketModal(true);
+        return;
+      }
+      if (inningsCompleted || matchCompleted || pendingBowlerChange || deliveryMutation.isPending) return;
+      if (key >= '0' && key <= '6') {
+        e.preventDefault();
+        recordRuns(parseInt(key, 10));
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [
+    inningsCompleted,
+    matchCompleted,
+    pendingBowlerChange,
+    deliveryMutation.isPending,
+    showWicketModal,
+    showNewBatsmanModal,
+    showBowlerSelect,
+    recordRuns,
+  ]);
+
   // ─── Loading state ────────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -770,7 +834,7 @@ export function ScoringPage() {
           >
             <div className="flex items-center gap-1.5 mb-2">
               <span className="striker-dot" />
-              <span className="text-[10px] font-bold text-cricket-green uppercase tracking-widest">Striker</span>
+              <span className="text-[10px] font-bold text-green-800 uppercase tracking-widest">Striker</span>
             </div>
             <p className="text-sm font-bold text-theme-primary truncate mb-1.5">
               {getPlayerName(striker, 'Batsman 1')}
@@ -950,6 +1014,7 @@ export function ScoringPage() {
             matchId={matchId!}
             commentary={latestCommentary}
             deliveryVersion={deliveryVersion}
+            onSaved={setLatestCommentary}
           />
         </motion.div>
       )}
@@ -1003,37 +1068,34 @@ export function ScoringPage() {
         variants={reduceMotion ? undefined : itemVariants}
       >
         {EXTRAS_CONFIG.map(({ mode, label, activeClass }) => (
-          <motion.button
-            key={mode}
-            layout={!reduceMotion}
-            onClick={() => setExtrasMode(mode === extrasMode ? 'normal' : mode)}
-            aria-label={`${label} delivery modifier`}
-            aria-pressed={extrasMode === mode}
-            whileTap={reduceMotion ? undefined : { scale: 0.95 }}
-            transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-            className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 flex items-center gap-1 ${
-              extrasMode === mode
-                ? `${activeClass} border`
-                : 'surface-muted border border-[var(--border-subtle)] hover:border-[var(--border-medium)]'
-            }`}
-          >
-            {label}
-            <AnimatePresence>
-              {extrasMode === mode && (
-                <motion.span
-                  initial={reduceMotion ? undefined : { opacity: 0, scale: 0 }}
-                  animate={reduceMotion ? undefined : { opacity: 0.6, scale: 1 }}
-                  exit={reduceMotion ? undefined : { opacity: 0, scale: 0 }}
-                  transition={{ type: 'spring', stiffness: 500, damping: 25 }}
-                  onClick={(e) => { e.stopPropagation(); setExtrasMode('normal'); }}
-                  className="ml-0.5 hover:opacity-100 cursor-pointer"
-                  aria-label={`Dismiss ${label} modifier`}
-                >
-                  <X size={10} />
-                </motion.span>
-              )}
-            </AnimatePresence>
-          </motion.button>
+          <div key={mode} className="inline-flex items-center gap-0.5">
+            <motion.button
+              type="button"
+              layout={!reduceMotion}
+              onClick={() => setExtrasMode(mode === extrasMode ? 'normal' : mode)}
+              aria-label={`${label} delivery modifier`}
+              aria-pressed={extrasMode === mode}
+              whileTap={reduceMotion ? undefined : { scale: 0.95 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+              className={`px-3 py-1.5 rounded-full text-[11px] font-semibold transition-colors duration-200 flex items-center gap-1 ${
+                extrasMode === mode
+                  ? `${activeClass} border`
+                  : 'surface-muted border border-[var(--border-subtle)] hover:border-[var(--border-medium)] text-theme-secondary'
+              }`}
+            >
+              {label}
+            </motion.button>
+            {extrasMode === mode && (
+              <motion.button
+                type="button"
+                onClick={() => setExtrasMode('normal')}
+                className="w-6 h-6 min-w-0 min-h-0 rounded-full flex items-center justify-center surface-muted border border-[var(--border-subtle)]"
+                aria-label={`Clear ${label} modifier`}
+              >
+                <X size={10} aria-hidden="true" />
+              </motion.button>
+            )}
+          </div>
         ))}
       </motion.div>
 
@@ -1112,9 +1174,9 @@ export function ScoringPage() {
           }
           transition={{ type: 'spring', stiffness: 400, damping: 15 }}
           className="w-full min-h-[56px] rounded-2xl flex items-center justify-center gap-2
-            bg-cricket-red/10 text-cricket-red border-2 border-cricket-red/25
+            bg-red-700 text-white border-2 border-red-800
             text-lg font-extrabold transition-colors duration-150 disabled:opacity-40
-            hover:bg-cricket-red/15 wicket-glow"
+            hover:bg-red-800"
           style={{ willChange: 'transform' }}
         >
           <AlertTriangle size={16} className="shrink-0 opacity-70" />
@@ -1289,23 +1351,25 @@ export function ScoringPage() {
                 setWicketDismissalType(null);
               }
             }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Wicket dismissal type selector"
           >
             <motion.div
               ref={wicketModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="wicket-modal-title"
               className="glass w-full max-w-md p-5"
+              onClick={(e) => e.stopPropagation()}
               initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 60, scale: 0.95 }}
               animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 60, scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             >
               <div className="flex items-center justify-between mb-5">
-                <h3 className="text-lg font-bold">
+                <h3 id="wicket-modal-title" className="text-lg font-bold">
                   {wicketDismissalType ? 'Confirm Wicket' : 'Dismissal Type'}
                 </h3>
                 <motion.button
+                  type="button"
                   ref={firstFocusableRef}
                   onClick={() => {
                     setShowWicketModal(false);
@@ -1467,18 +1531,39 @@ export function ScoringPage() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            role="dialog"
-            aria-modal="true"
-            aria-label="Select new batsman"
+            onClick={() => {
+              setShowNewBatsmanModal(false);
+              setDismissedPlayerId(null);
+            }}
           >
             <motion.div
+              ref={newBatsmanModalRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="new-batsman-modal-title"
               className="glass w-full max-w-md p-5"
+              onClick={(e) => e.stopPropagation()}
               initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 60, scale: 0.95 }}
               animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 60, scale: 0.95 }}
               transition={{ type: 'spring', stiffness: 300, damping: 25 }}
             >
-              <h3 className="text-lg font-bold mb-1">New Batsman</h3>
+              <div className="flex items-center justify-between mb-1">
+                <h3 id="new-batsman-modal-title" className="text-lg font-bold">New Batsman</h3>
+                <motion.button
+                  type="button"
+                  ref={newBatsmanCloseRef}
+                  onClick={() => {
+                    setShowNewBatsmanModal(false);
+                    setDismissedPlayerId(null);
+                  }}
+                  aria-label="Close new batsman selector"
+                  whileTap={reduceMotion ? undefined : { scale: 0.9 }}
+                  className="w-8 h-8 min-w-0 min-h-0 rounded-lg btn-close flex items-center justify-center transition-colors"
+                >
+                  <X size={14} aria-hidden="true" />
+                </motion.button>
+              </div>
               <p className="text-xs text-theme-muted mb-4">Select the next batsman to come in</p>
 
               <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
@@ -1498,6 +1583,8 @@ export function ScoringPage() {
                     return (
                       <motion.button
                         key={pid}
+                        type="button"
+                        aria-label={`Select ${name} as new batsman`}
                         whileTap={reduceMotion ? undefined : { scale: 0.95 }}
                         onClick={() => {
                           // Replace the PENDING slot with the selected batsman

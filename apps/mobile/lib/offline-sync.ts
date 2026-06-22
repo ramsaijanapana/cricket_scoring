@@ -51,6 +51,13 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
       matchId TEXT PRIMARY KEY,
       undoStackPos INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS pending_undos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      matchId TEXT NOT NULL,
+      inningsId TEXT NOT NULL,
+      createdAt TEXT NOT NULL DEFAULT (datetime('now')),
+      synced INTEGER NOT NULL DEFAULT 0
+    );
   `);
   return db;
 }
@@ -102,6 +109,25 @@ export async function refreshUndoStackPos(matchId: string): Promise<number> {
 }
 
 // ─── Optimistic scoring ─────────────────────────────────────────────────────
+
+function decrementOvers(currentOvers: string | number, extraType: RecordDeliveryInput["extra_type"]): string {
+  if (extraType === "wide" || extraType === "noball") {
+    return String(currentOvers ?? "0.0");
+  }
+
+  let overs = parseFloat(String(currentOvers ?? "0"));
+  const completedOvers = Math.floor(overs);
+  const ballsInOver = Math.round((overs - completedOvers) * 10);
+
+  if (ballsInOver === 0) {
+    if (completedOvers === 0) return "0.0";
+    overs = completedOvers - 1 + 5 / 10;
+  } else {
+    overs = completedOvers + (ballsInOver - 1) / 10;
+  }
+
+  return overs.toFixed(1);
+}
 
 function incrementOvers(currentOvers: string | number, extraType: RecordDeliveryInput["extra_type"]): string {
   if (extraType === "wide" || extraType === "noball") {
@@ -193,6 +219,71 @@ export function applyOptimisticDelivery(match: any, payload: RecordDeliveryInput
   };
 }
 
+/**
+ * Reverse a prior optimistic delivery update (offline undo of queued ball).
+ */
+export function reverseOptimisticDelivery(match: any, payload: RecordDeliveryInput): any {
+  const inningsList = [...(match?.innings ?? [])];
+  const innIdx = inningsList.findIndex(
+    (inn: any) =>
+      inn.inningsNumber === payload.innings_num && inn.status === "in_progress",
+  );
+  if (innIdx === -1) return match;
+
+  const inn = { ...inningsList[innIdx] };
+  const totalRuns =
+    (inn.totalRuns ?? 0) - (payload.runs_batsman ?? 0) - (payload.runs_extras ?? 0);
+  const totalWickets = (inn.totalWickets ?? 0) - (payload.is_wicket ? 1 : 0);
+  const totalOvers = decrementOvers(inn.totalOvers ?? "0.0", payload.extra_type ?? null);
+
+  const battingScorecard = (inn.battingScorecard ?? []).map((entry: any) => {
+    if (entry.playerId !== payload.striker_id) return entry;
+
+    const ballsDecrement = payload.extra_type === "wide" ? 0 : 1;
+    return {
+      ...entry,
+      runsScored: Math.max(0, (entry.runsScored ?? 0) - (payload.runs_batsman ?? 0)),
+      ballsFaced: Math.max(0, (entry.ballsFaced ?? 0) - ballsDecrement),
+      isOut: payload.is_wicket ? false : entry.isOut,
+    };
+  });
+
+  const bowlingScorecard = (inn.bowlingScorecard ?? []).map((entry: any) => {
+    if (entry.playerId !== payload.bowler_id) return entry;
+
+    const runsConceded =
+      (entry.runsConceded ?? 0) -
+      (payload.runs_batsman ?? 0) -
+      (payload.runs_extras ?? 0);
+
+    return {
+      ...entry,
+      runsConceded: Math.max(0, runsConceded),
+      wicketsTaken: Math.max(
+        0,
+        (entry.wicketsTaken ?? 0) - (payload.is_wicket ? 1 : 0),
+      ),
+    };
+  });
+
+  inningsList[innIdx] = {
+    ...inn,
+    totalRuns: Math.max(0, totalRuns),
+    totalWickets: Math.max(0, totalWickets),
+    totalOvers,
+    battingScorecard,
+    bowlingScorecard,
+  };
+
+  const thisOver = (match?.thisOver ?? []).slice(0, -1);
+
+  return {
+    ...match,
+    innings: inningsList,
+    thisOver,
+  };
+}
+
 // ─── Public API ─────────────────────────────────────────────────────────────
 
 /**
@@ -207,6 +298,75 @@ export async function queueDelivery(
     "INSERT INTO pending_deliveries (matchId, payload, createdAt, synced) VALUES (?, ?, datetime('now'), 0)",
     [matchId, JSON.stringify(payload)],
   );
+}
+
+/**
+ * Remove the most recently queued delivery for a match (offline undo path).
+ */
+export async function removeLastPendingDelivery(
+  matchId: string,
+): Promise<RecordDeliveryInput | null> {
+  const database = await getDb();
+  const row = await database.getFirstAsync<PendingDelivery>(
+    "SELECT * FROM pending_deliveries WHERE synced = 0 AND matchId = ? ORDER BY id DESC LIMIT 1",
+    [matchId],
+  );
+  if (!row) return null;
+
+  await database.runAsync("DELETE FROM pending_deliveries WHERE id = ?", [row.id]);
+  return JSON.parse(row.payload) as RecordDeliveryInput;
+}
+
+interface PendingUndo {
+  id: number;
+  matchId: string;
+  inningsId: string;
+  createdAt: string;
+  synced: number;
+}
+
+/**
+ * Queue an undo request for sync when back online.
+ */
+export async function queueUndo(matchId: string, inningsId: string): Promise<void> {
+  const database = await getDb();
+  await database.runAsync(
+    "INSERT INTO pending_undos (matchId, inningsId, createdAt, synced) VALUES (?, ?, datetime('now'), 0)",
+    [matchId, inningsId],
+  );
+}
+
+async function syncPendingUndos(matchId?: string): Promise<number> {
+  const database = await getDb();
+  const pending = matchId
+    ? await database.getAllAsync<PendingUndo>(
+        "SELECT * FROM pending_undos WHERE synced = 0 AND matchId = ? ORDER BY id ASC",
+        [matchId],
+      )
+    : await database.getAllAsync<PendingUndo>(
+        "SELECT * FROM pending_undos WHERE synced = 0 ORDER BY id ASC",
+      );
+
+  let syncedCount = 0;
+
+  for (const row of pending) {
+    try {
+      await api.undoLastBall(row.matchId, row.inningsId);
+      await database.runAsync("UPDATE pending_undos SET synced = 1 WHERE id = ?", [row.id]);
+      const nextPos = Math.max(0, (await getUndoStackPos(row.matchId)) - 1);
+      await setUndoStackPos(row.matchId, nextPos);
+      syncedCount++;
+    } catch (error) {
+      console.warn("[offline-sync] Failed to sync undo:", row.id, error);
+      break;
+    }
+  }
+
+  await database.runAsync(
+    "DELETE FROM pending_undos WHERE synced = 1 AND createdAt < datetime('now', '-1 day')",
+  );
+
+  return syncedCount;
 }
 
 /**
@@ -270,6 +430,9 @@ export async function syncPendingDeliveries(
   await database.runAsync(
     "DELETE FROM pending_deliveries WHERE synced = 1 AND createdAt < datetime('now', '-1 day')",
   );
+
+  const undoSynced = await syncPendingUndos(options.matchId);
+  syncedCount += undoSynced;
 
   return { syncedCount };
 }

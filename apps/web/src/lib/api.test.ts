@@ -175,3 +175,62 @@ describe('parseJwtPayload', () => {
     expect(parseJwtPayload('not-a-jwt')).toBeNull();
   });
 });
+
+describe('social layer api helpers', () => {
+  beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn());
+    clearAuthToken();
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('getMatchPresence fetches spectator count', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ count: 42 }),
+    } as Response);
+
+    await expect(api.getMatchPresence('match-1')).resolves.toEqual({ count: 42 });
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/matches/match-1/presence',
+      expect.any(Object),
+    );
+  });
+
+  it('getReactions fetches aggregated counts for a delivery', async () => {
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () =>
+        Promise.resolve({
+          data: [{ deliveryId: 'd1', emoji: '\uD83D\uDD25', count: 3 }],
+        }),
+    } as Response);
+
+    await expect(api.getReactions('match-1', 'd1')).resolves.toEqual({
+      data: [{ deliveryId: 'd1', emoji: '\uD83D\uDD25', count: 3 }],
+    });
+  });
+
+  it('submitReaction posts emoji payload', async () => {
+    setAuthToken('test-token');
+    vi.mocked(fetch).mockResolvedValue({
+      ok: true,
+      status: 201,
+      json: () => Promise.resolve({ id: 'r1', emoji: '\uD83D\uDC4F' }),
+    } as Response);
+
+    await api.submitReaction('match-1', { deliveryId: 'd1', emoji: '\uD83D\uDC4F' });
+
+    expect(fetch).toHaveBeenCalledWith(
+      '/api/v1/matches/match-1/reactions',
+      expect.objectContaining({
+        method: 'POST',
+        body: JSON.stringify({ deliveryId: 'd1', emoji: '\uD83D\uDC4F' }),
+      }),
+    );
+  });
+});

@@ -5,6 +5,7 @@ import Constants from "expo-constants";
 import { router } from "expo-router";
 import { api } from "./api";
 import { storage } from "./storage";
+import { colors } from "@cricket/ui/tokens";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
       name: "Default",
       importance: Notifications.AndroidImportance.MAX,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#16a34a",
+      lightColor: colors.cricket.green,
     });
 
     await Notifications.setNotificationChannelAsync("match_events", {
@@ -78,7 +79,7 @@ export async function registerForPushNotifications(): Promise<string | null> {
       description: "Wickets, milestones, and match completions",
       importance: Notifications.AndroidImportance.HIGH,
       vibrationPattern: [0, 250, 250, 250],
-      lightColor: "#16a34a",
+      lightColor: colors.cricket.green,
     });
   }
 

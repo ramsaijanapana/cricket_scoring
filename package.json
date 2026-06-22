@@ -30,7 +30,9 @@
     "test:e2e": "bash scripts/e2e-test.sh",
     "test:e2e:smoke": "bash scripts/e2e-test.sh",
     "test:e2e:all": "bash scripts/e2e-test.sh && bash scripts/e2e-test-phase2.sh && bash scripts/e2e-test-architecture.sh",
-    "test:e2e:playwright": "npm run test:e2e:playwright -w @cricket/web"
+    "test:e2e:playwright": "npm run test:e2e:playwright -w @cricket/web",
+    "test:e2e:playwright:smoke": "npm run test:e2e:playwright:smoke -w @cricket/web",
+    "test:e2e:docker": "bash scripts/e2e-docker.sh"
   },
   "devDependencies": {
     "@typescript-eslint/eslint-plugin": "^8.58.0",

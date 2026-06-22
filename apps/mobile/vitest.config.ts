@@ -11,5 +11,11 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['lib/**/*.test.ts'],
+    pool: 'forks',
+    server: {
+      deps: {
+        inline: ['expo-sqlite', 'expo-network'],
+      },
+    },
   },
 });

@@ -102,9 +102,12 @@ export const offlineStore = {
     await db.put('scorecard_cache', { matchId, scorecard, cachedAt: Date.now() });
   },
 
-  async getCachedScorecard(matchId: string): Promise<any | null> {
+  async getCachedScorecard(
+    matchId: string,
+  ): Promise<{ scorecard: any; cachedAt: number } | null> {
     const db = await getDB();
     const entry = await db.get('scorecard_cache', matchId);
-    return entry?.scorecard ?? null;
+    if (!entry?.scorecard) return null;
+    return { scorecard: entry.scorecard, cachedAt: entry.cachedAt ?? 0 };
   },
 };

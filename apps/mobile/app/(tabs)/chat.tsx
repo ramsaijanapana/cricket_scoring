@@ -34,7 +34,7 @@ export default function ChatScreen() {
     try {
       setError(null);
       const res = await api.getChatRooms();
-      setRooms(res.data);
+      setRooms(res.data as ChatRoom[]);
     } catch (err: any) {
       setError(err.message || "Failed to load chat rooms");
     } finally {

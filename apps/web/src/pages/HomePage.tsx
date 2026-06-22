@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trophy, Zap, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { useDocumentTitle } from '../hooks/useDocumentTitle';
+import { Button, Card, MatchStatusPill, getMatchAccentColor, withAlpha, colors } from '@cricket/ui';
 
 const cardVariants = {
   hidden: { opacity: 0, y: 16, scale: 0.98 },
@@ -143,13 +144,10 @@ export function HomePage() {
             className="card py-12 text-center"
           >
             <p className="text-theme-muted text-sm mb-3">Failed to load matches.</p>
-            <button
-              onClick={() => refetch()}
-              className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-cricket-green text-white"
-            >
+            <Button variant="primary" size="sm" onClick={() => refetch()}>
               <RefreshCw size={14} />
               Retry
-            </button>
+            </Button>
           </motion.div>
         ) : !matches?.length ? (
           <motion.div
@@ -163,9 +161,9 @@ export function HomePage() {
               animate={{ y: [0, -6, 0] }}
               transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
               className="w-24 h-24 rounded-3xl flex items-center justify-center mb-3 relative"
-              style={{ background: 'linear-gradient(135deg, rgba(22, 163, 74, 0.12), rgba(5, 150, 105, 0.08))' }}
+              style={{ background: `linear-gradient(135deg, ${withAlpha(colors.cricket.green, 0.12)}, rgba(5, 150, 105, 0.08))` }}
             >
-              <div className="absolute inset-0 rounded-3xl" style={{ border: '1px solid rgba(22, 163, 74, 0.15)' }} />
+              <div className="absolute inset-0 rounded-3xl" style={{ border: `1px solid ${withAlpha(colors.cricket.green, 0.15)}` }} />
               <Trophy size={40} className="text-cricket-green opacity-60" />
             </motion.div>
             <p className="text-theme-primary text-xl font-bold">No matches yet</p>
@@ -201,27 +199,12 @@ export function HomePage() {
 }
 
 function MatchCard({ match }: { match: any }) {
-  const statusConfig: Record<string, { label: string; class: string; dot?: boolean }> = {
-    live: { label: 'LIVE', class: 'badge-live', dot: true },
-    completed: { label: 'COMPLETED', class: 'badge-completed' },
-    scheduled: { label: 'SCHEDULED', class: 'badge-scheduled' },
-    rain_delay: { label: 'RAIN DELAY', class: 'badge-delay' },
-    innings_break: { label: 'INNINGS BREAK', class: 'badge-delay' },
-    abandoned: { label: 'ABANDONED', class: 'badge bg-cricket-red/15 text-cricket-red' },
-    toss: { label: 'TOSS', class: 'badge-scheduled' },
-  };
-
-  const status = statusConfig[match.status] || statusConfig.scheduled;
-
-  const accentColor = match.status === 'live' ? '#16a34a' : match.status === 'scheduled' ? '#3b82f6' : '#737373';
+  const accentColor = getMatchAccentColor(match.status);
   const isLive = match.status === 'live';
 
   return (
-    <motion.div
-      className="card card-hover group cursor-default relative overflow-hidden"
-      whileHover={{ y: -4, scale: 1.01 }}
-      transition={{ type: 'spring', stiffness: 400, damping: 25 }}
-    >
+    <motion.div whileHover={{ y: -4, scale: 1.01 }} transition={{ type: 'spring', stiffness: 400, damping: 25 }}>
+      <Card hover className="group cursor-default relative overflow-hidden">
       {/* Left accent bar */}
       <div
         className="absolute left-0 top-0 bottom-0 w-[3px] rounded-l-2xl"
@@ -230,22 +213,13 @@ function MatchCard({ match }: { match: any }) {
 
       {/* Live gradient overlay */}
       {isLive && (
-        <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ background: 'linear-gradient(135deg, rgba(22, 163, 74, 0.04), transparent 60%)' }} />
+        <div className="absolute inset-0 rounded-2xl pointer-events-none" style={{ background: `linear-gradient(135deg, ${withAlpha(colors.cricket.green, 0.04)}, transparent 60%)` }} />
       )}
 
       {/* Team names + score */}
       <div className="mb-4 relative">
         <div className="flex items-center justify-between mb-3">
-          <span className={status.class}>
-            {status.dot && (
-              <motion.span
-                className="w-1.5 h-1.5 rounded-full bg-current inline-block"
-                animate={{ opacity: [1, 0.3, 1] }}
-                transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
-              />
-            )}
-            {status.label}
-          </span>
+          <MatchStatusPill status={match.status} />
         </div>
 
         <div className="space-y-2.5">
@@ -293,6 +267,7 @@ function MatchCard({ match }: { match: any }) {
           Scorecard
         </Link>
       </div>
+      </Card>
     </motion.div>
   );
 }

@@ -4,9 +4,20 @@
     "jsx": "react-jsx",
     "outDir": "./dist",
     "paths": {
-      "@/*": ["./src/*"],
-      "@cricket/shared": ["../../packages/shared/src"]
-    }
+      "@/*": [
+        "./src/*"
+      ],
+      "@cricket/shared": [
+        "../../packages/shared/src"
+      ]
+    },
+    "moduleSuffixes": [
+      ".web",
+      ""
+    ]
   },
-  "include": ["src/**/*", "vite-env.d.ts"]
+  "include": [
+    "src/**/*",
+    "vite-env.d.ts"
+  ]
 }

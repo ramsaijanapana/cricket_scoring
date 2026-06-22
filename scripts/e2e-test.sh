@@ -170,6 +170,15 @@ assert_status "Re-login after logout returns 200" "200" "$STATUS"
 ACCESS_TOKEN=$(json_get "$BODY" "access_token")
 REFRESH_TOKEN=$(json_get "$BODY" "refresh_token")
 
+# Match/scoring routes require scorer or admin; registered users are spectators.
+E2E_ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-admin@cricscore.dev}"
+E2E_ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-password123}"
+RAW=$(post "$API/auth/login" "{\"email\":\"$E2E_ADMIN_EMAIL\",\"password\":\"$E2E_ADMIN_PASSWORD\"}")
+split_response "$RAW"
+assert_status "Login as admin for scoring routes returns 200" "200" "$STATUS"
+ACCESS_TOKEN=$(json_get "$BODY" "access_token")
+assert_contains "Admin login has access_token" "$BODY" "access_token"
+
 echo ""
 
 ###############################################################################
@@ -376,7 +385,7 @@ score_ball "2.2 two" \
 
 # 2.3 WICKET
 score_ball "2.3 WICKET" \
-  "{\"innings_num\":1,\"bowler_id\":\"$BOWLER2\",\"striker_id\":\"$BATTER1\",\"non_striker_id\":\"$BATTER2\",\"runs_batsman\":0,\"runs_extras\":0,\"is_wicket\":true,\"wicket_type\":\"bowled\",\"dismissed_id\":\"$BATTER1\",\"is_retired_hurt\":false}" \
+  "{\"innings_num\":1,\"bowler_id\":\"$BOWLER2\",\"striker_id\":\"$BATTER1\",\"non_striker_id\":\"$BATTER2\",\"runs_batsman\":0,\"runs_extras\":0,\"is_wicket\":true,\"wicket_type\":\"bowled\",\"dismissed_player_id\":\"$BATTER1\",\"is_retired_hurt\":false}" \
   "\"isWicket\":true"
 
 # 2.4 Single (new batter)
@@ -464,7 +473,7 @@ echo "--- 11. DRS Review ---"
 
 # Record LBW delivery
 score_ball "LBW for DRS" \
-  "{\"innings_num\":1,\"bowler_id\":\"$BOWLER1\",\"striker_id\":\"$BATTER2\",\"non_striker_id\":\"$BATTER3\",\"runs_batsman\":0,\"runs_extras\":0,\"is_wicket\":true,\"wicket_type\":\"lbw\",\"dismissed_id\":\"$BATTER2\",\"is_retired_hurt\":false}"
+  "{\"innings_num\":1,\"bowler_id\":\"$BOWLER1\",\"striker_id\":\"$BATTER2\",\"non_striker_id\":\"$BATTER3\",\"runs_batsman\":0,\"runs_extras\":0,\"is_wicket\":true,\"wicket_type\":\"lbw\",\"dismissed_player_id\":\"$BATTER2\",\"is_retired_hurt\":false}"
 
 LBW_DEL_ID=$(json_get "$BODY" "delivery.id")
 echo "    -> LBW delivery: $LBW_DEL_ID"
@@ -532,6 +541,12 @@ echo ""
 # 13. GDPR
 ###############################################################################
 echo "--- 13. GDPR ---"
+
+# Export/delete the user created in the auth section (not the seeded admin).
+RAW=$(post "$API/auth/login" "{\"email\":\"$UNIQUE_EMAIL\",\"password\":\"Test1234!\"}")
+split_response "$RAW"
+assert_status "Re-login registered user for GDPR returns 200" "200" "$STATUS"
+ACCESS_TOKEN=$(json_get "$BODY" "access_token")
 
 RAW=$(get_auth "$API/users/me/export")
 split_response "$RAW"

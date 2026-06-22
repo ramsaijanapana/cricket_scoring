@@ -2,18 +2,29 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "lib": ["ES2022"],
+    "lib": [
+      "ES2022"
+    ],
     "noEmit": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./*"],
-      "@cricket/shared": ["../../packages/shared/src"]
-    }
+      "@/*": [
+        "./*"
+      ],
+      "@cricket/shared": [
+        "../../packages/shared/src"
+      ]
+    },
+    "moduleSuffixes": [
+      ".native",
+      ""
+    ]
   },
   "include": [
     "**/*.ts",
     "**/*.tsx",
     ".expo/types/**/*.ts",
-    "expo-env.d.ts"
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
   ]
 }

@@ -1,28 +1,22 @@
 import type { Delivery, Commentary, Partnership } from './models';
 import type { DismissalType } from './enums';
-
-// ─── Scoring Input (Scorer → Server) — context.md section 6.2 ───────────────
+import type { ScorecardSnapshot } from './dtos';
 
 export interface DeliveryInput {
   matchId: string;
   inningsNum: 1 | 2 | 3 | 4;
-
   bowlerId: string;
   strikerId: string;
   nonStrikerId: string;
-
   runsBatsman: number;
   runsExtras: number;
   extraType: 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty' | null;
-
   isWicket: boolean;
   wicketType?: DismissalType | null;
   dismissedId?: string | null;
   fielderIds?: string[];
   isRetiredHurt?: boolean;
   isDeadBall?: boolean;
-
-  // Optional shot & pitch tracking
   shotType?: string | null;
   landingX?: number | null;
   landingY?: number | null;
@@ -32,100 +26,80 @@ export interface DeliveryInput {
   swingType?: string | null;
 }
 
-// ─── WebSocket Events (Server → Client) — context.md section 6.2 ────────────
-
-/**
- * Event names follow pattern: match:{id}:<event_type>
- *
- * match:{id}:delivery    → delivery + scorecard snapshot + commentary
- * match:{id}:wicket      → delivery + wicket detail + commentary + partnership ended
- * match:{id}:over        → over summary + bowler stats + run rate
- * match:{id}:milestone   → milestone type + player + text
- * match:{id}:prediction  → win probabilities + projected scores
- * match:{id}:dls_update  → par score + revised target + resources remaining
- * match:{id}:status      → match status change + reason
- */
+export const WS_EVENTS = {
+  delivery: (matchId: string) => `match:${matchId}:delivery`,
+  wicket: (matchId: string) => `match:${matchId}:wicket`,
+  over: (matchId: string) => `match:${matchId}:over`,
+  milestone: (matchId: string) => `match:${matchId}:milestone`,
+  prediction: (matchId: string) => `match:${matchId}:prediction`,
+  dlsUpdate: (matchId: string) => `match:${matchId}:dls_update`,
+  status: (matchId: string) => `match:${matchId}:status`,
+} as const;
 
 export interface DeliveryEvent {
   delivery: Delivery;
-  scorecardSnapshot: ScorecardSnapshot;
+  scorecard_snapshot: ScorecardSnapshot;
   commentary: Commentary;
 }
 
 export interface WicketEvent {
   delivery: Delivery;
-  wicketDetail: {
-    wicketType: DismissalType;
-    dismissedId: string;
-    bowlerId: string;
-    fielderIds: string[];
+  wicket_detail: {
+    wicket_type: DismissalType;
+    dismissed_id: string;
+    bowler_id: string;
+    fielder_ids: string[];
     text: string;
   };
   commentary: Commentary;
-  partnershipEnded: Partnership;
+  partnership_ended: Partnership;
 }
 
 export interface OverEvent {
-  overSummary: {
-    overNum: number;
+  over_summary: {
+    over_num: number;
     runs: number;
     wickets: number;
     maidens: boolean;
     extras: number;
   };
-  bowlerStats: {
-    bowlerId: string;
+  bowler_stats: {
+    bowler_id: string;
     overs: number;
     runs: number;
     wickets: number;
     economy: number;
   };
-  runRate: number;
+  run_rate: number;
 }
 
 export interface MilestoneEvent {
   type: 'fifty' | 'hundred' | 'one_fifty' | 'double_hundred' | 'five_wickets' | 'hat_trick' | 'fastest_fifty' | 'team_hundred' | 'team_two_hundred' | 'team_three_hundred';
-  player: {
-    id: string;
-    name: string;
-  };
+  player: { id: string; name: string };
   text: string;
 }
 
 export interface PredictionEvent {
-  winProbA: number;
-  winProbB: number;
-  projectedScoreLow: number;
-  projectedScoreHigh: number;
+  win_prob_a: number;
+  win_prob_b: number;
+  projected_score_low: number;
+  projected_score_high: number;
+  model_version?: string;
 }
 
 export interface DLSUpdateEvent {
-  parScore: number;
-  revisedTarget: number | null;
-  resourcesRemaining: number;
+  par_score: number;
+  revised_target: number | null;
+  resources_remaining: number;
+  interruption_count?: number;
 }
 
 export interface StatusEvent {
   status: string;
   reason: string;
-  /** DLS interruption data (present when status is 'rain_delay') */
-  dlsInterruption?: unknown;
-  /** DLS calculation state (present when status is 'resumed' with DLS recalculation) */
-  dlsState?: unknown;
+  dls_interruption?: unknown;
+  dls_state?: unknown;
 }
-
-// ─── Scorecard Snapshot (embedded in delivery events) ────────────────────────
-
-export interface ScorecardSnapshot {
-  inningsScore: number;
-  inningsWickets: number;
-  inningsOvers: string;
-  runRate: number;
-  requiredRunRate: number | null;
-  target: number | null;
-}
-
-// ─── Socket.IO typed events map ──────────────────────────────────────────────
 
 export interface ServerToClientEvents {
   [key: `match:${string}:delivery`]: (data: DeliveryEvent) => void;
@@ -138,8 +112,8 @@ export interface ServerToClientEvents {
 }
 
 export interface ClientToServerEvents {
-  joinMatch: (data: { matchId: string }) => void;
-  leaveMatch: (data: { matchId: string }) => void;
-  submitDelivery: (data: DeliveryInput) => void;
-  undoLastBall: (data: { matchId: string }) => void;
+  join_match: (data: { match_id: string }) => void;
+  leave_match: (data: { match_id: string }) => void;
+  submit_delivery: (data: DeliveryInput) => void;
+  undo_last_ball: (data: { match_id: string }) => void;
 }

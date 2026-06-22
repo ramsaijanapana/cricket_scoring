@@ -213,7 +213,7 @@ export function Layout() {
           </div>
 
           <div className="flex items-center gap-1">
-            <nav className="hidden tablet:flex items-center gap-0.5" aria-label="Main">
+            <nav className="hidden tablet:flex items-center gap-0.5" aria-label="Main navigation">
               {NAV_ITEMS.map((item) => (
                 <NavLink
                   key={item.to}
@@ -241,6 +241,7 @@ export function Layout() {
             </motion.div>
 
             <motion.button
+              type="button"
               onClick={cycleTheme}
               className="ml-1 flex items-center justify-center w-9 h-9 min-h-0 min-w-0 rounded-xl transition-colors duration-200 text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]"
               whileTap={{ scale: 0.9 }}
@@ -282,7 +283,7 @@ export function Layout() {
               exit={{ x: '-100%' }}
               transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
               className="tablet:hidden fixed top-0 left-0 bottom-0 z-[70] w-[min(280px,85vw)] bg-[var(--header-bg)] backdrop-blur-[20px] backdrop-saturate-[180%] border-r border-[var(--border-subtle)] shadow-xl flex flex-col"
-              aria-label="Main"
+              aria-label="Mobile navigation"
             >
               <div className="flex items-center justify-between px-4 h-14 border-b border-[var(--border-subtle)]">
                 <span className="font-bold text-base tracking-tight">

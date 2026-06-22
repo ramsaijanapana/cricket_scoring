@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useMatchSocket } from './useMatchSocket';
 import { useScoringStore } from '../stores/scoring-store';
-import { WS_EVENTS } from '../lib/socket';
+import { WS_EVENTS } from '@cricket/shared';
 
 const handlers: Record<string, (...args: unknown[]) => void> = {};
 
@@ -82,6 +82,62 @@ describe('useMatchSocket', () => {
     });
 
     expect(result.current.milestoneToast).toEqual({ text: 'Fifty!', type: 'fifty' });
+  });
+
+
+  it('patches match cache on delivery without invalidating', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    queryClient.setQueryData(['match', 'match-1'], {
+      id: 'match-1',
+      status: 'live',
+      currentScore: '0/0',
+      currentOvers: '0.0',
+      innings: [{
+        id: 'inn-1',
+        status: 'in_progress',
+        totalRuns: 0,
+        totalWickets: 0,
+        totalOvers: 0,
+      }],
+    });
+
+    const localWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useMatchSocket('match-1'), { wrapper: localWrapper });
+
+    act(() => {
+      handlers[WS_EVENTS.delivery('match-1')]({
+        scorecard_snapshot: {
+          innings_score: 4,
+          innings_wickets: 0,
+          innings_overs: '0.1',
+          run_rate: 24,
+        },
+      });
+    });
+
+    expect(invalidateSpy).not.toHaveBeenCalled();
+    const updated = queryClient.getQueryData<any>(['match', 'match-1']);
+    expect(updated.currentScore).toBe('4/0');
+  });
+
+  it('refetches match cache on over end', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateSpy = vi.spyOn(queryClient, 'invalidateQueries');
+    const localWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+
+    renderHook(() => useMatchSocket('match-1'), { wrapper: localWrapper });
+
+    act(() => {
+      handlers[WS_EVENTS.over('match-1')]({});
+    });
+
+    expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ['match', 'match-1'] });
   });
 
   it('leaves match and unsubscribes on cleanup', () => {

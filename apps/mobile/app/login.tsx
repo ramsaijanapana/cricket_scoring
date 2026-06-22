@@ -2,18 +2,16 @@ import { useState } from "react";
 import {
   View,
   Text,
-  TextInput,
   Pressable,
   Alert,
-  ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { useRouter } from "expo-router";
+import { Button, Input } from "@cricket/ui";
 import { api } from "../lib/api";
 import { storage } from "../lib/storage";
 import { registerPushTokenIfAuthed } from "../lib/notifications";
-import { colors } from "../lib/theme";
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -29,10 +27,7 @@ export default function LoginScreen() {
 
     setLoading(true);
     try {
-      const response = await api.login({
-        email: email.trim(),
-        password,
-      });
+      const response = await api.login({ email: email.trim(), password });
       await storage.setToken(response.token);
       await storage.setRefreshToken(response.refreshToken);
       const user = await api.getMyProfile();
@@ -59,12 +54,8 @@ export default function LoginScreen() {
           Sign in to sync your profile and scoring data
         </Text>
 
-        <Text className="mb-2 text-sm font-semibold text-surface-400">
-          EMAIL
-        </Text>
-        <TextInput
-          className="mb-4 rounded-lg bg-surface-800 px-4 py-3 text-base text-white"
-          placeholderTextColor={colors.surface[500]}
+        <Input
+          label="Email"
           placeholder="you@example.com"
           value={email}
           onChangeText={setEmail}
@@ -73,12 +64,8 @@ export default function LoginScreen() {
           autoComplete="email"
         />
 
-        <Text className="mb-2 text-sm font-semibold text-surface-400">
-          PASSWORD
-        </Text>
-        <TextInput
-          className="mb-8 rounded-lg bg-surface-800 px-4 py-3 text-base text-white"
-          placeholderTextColor={colors.surface[500]}
+        <Input
+          label="Password"
           placeholder="Password"
           value={password}
           onChangeText={setPassword}
@@ -86,19 +73,9 @@ export default function LoginScreen() {
           autoComplete="password"
         />
 
-        <Pressable
-          onPress={handleLogin}
-          disabled={loading}
-          className={`items-center rounded-xl py-4 ${
-            loading ? "bg-surface-700" : "bg-cricket-green active:opacity-80"
-          }`}
-        >
-          {loading ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text className="text-lg font-bold text-white">Sign In</Text>
-          )}
-        </Pressable>
+        <Button onPress={handleLogin} disabled={loading} loading={loading} fullWidth>
+          Sign In
+        </Button>
 
         <Pressable
           onPress={() => router.push("/register")}

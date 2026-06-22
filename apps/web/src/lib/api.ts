@@ -1,5 +1,4 @@
 import type {
-  Match,
   Player,
   Team,
   Delivery,
@@ -10,31 +9,14 @@ import type {
   BattingScorecard,
   BowlingScorecard,
   CreateMatchInput,
+  MatchDetail,
+  MatchTeamDetail,
+  RecordDeliveryInput,
+  RecordDeliveryResult,
+  Match,
 } from '@cricket/shared';
 
-export type { CreateMatchInput };
-
-// ─── Extended API response types ────────────────────────────────────────────
-// The API returns enriched objects with joined/computed fields beyond the base models.
-
-export interface MatchTeamInfo {
-  teamId: string;
-  teamName: string;
-  designation: string;
-  playingXi: string[];
-  playerNames?: Record<string, string>;
-}
-
-export interface MatchDetail extends Match {
-  teams?: MatchTeamInfo[];
-  innings?: Innings[];
-  homeTeamName?: string;
-  awayTeamName?: string;
-  currentScore?: string;
-  currentOvers?: string;
-  city?: string;
-  resultSummary?: string;
-}
+export type { CreateMatchInput, MatchDetail, MatchTeamDetail as MatchTeamInfo, RecordDeliveryInput, RecordDeliveryResult };
 
 export interface FallOfWicket {
   wicketNumber: number;
@@ -353,8 +335,8 @@ export const api = {
     request<Player>('/players', { method: 'POST', body: JSON.stringify(data) }),
 
   // Scoring
-  recordDelivery: (matchId: string, data: Partial<Delivery>) =>
-    request<Delivery>(`/matches/${matchId}/deliveries`, { method: 'POST', body: JSON.stringify(data) }),
+  recordDelivery: (matchId: string, data: RecordDeliveryInput) =>
+    request<RecordDeliveryResult>(`/matches/${matchId}/deliveries`, { method: 'POST', body: JSON.stringify(data) }),
   undoLastBall: (matchId: string, inningsId: string) =>
     request<{ success: boolean }>(`/matches/${matchId}/deliveries/last`, {
       method: 'DELETE',
@@ -368,10 +350,13 @@ export const api = {
 
   // Scorecard & Commentary
   getScorecard: (matchId: string) => request<InningsScorecard[]>(`/matches/${matchId}/scorecard`),
-  getCommentary: (matchId: string, page = 1) =>
-    request<{ data: Commentary[]; page: number; limit: number; hasMore: boolean }>(
-      `/matches/${matchId}/commentary?page=${page}`,
-    ),
+  getCommentary: (matchId: string, page = 1, options?: { lang?: string }) => {
+    const params = new URLSearchParams({ page: String(page) });
+    if (options?.lang) params.set('lang', options.lang);
+    return request<{ data: Commentary[]; page: number; limit: number; hasMore: boolean }>(
+      `/matches/${matchId}/commentary?${params}`,
+    );
+  },
   updateCommentary: (matchId: string, commentaryId: string, data: { text?: string; text_short?: string }) =>
     request<Commentary>(`/matches/${matchId}/commentary/${commentaryId}`, {
       method: 'PATCH',
@@ -525,6 +510,10 @@ export const api = {
   getAuditLog: (matchId: string, page = 1) =>
     request<{ data: any[]; page: number; limit: number }>(`/matches/${matchId}/audit-log?page=${page}`),
 
+  // Spectator Presence
+  getMatchPresence: (matchId: string) =>
+    request<{ count: number }>(`/matches/${matchId}/presence`),
+
   // Emoji Reactions
   submitReaction: (matchId: string, data: { deliveryId: string; emoji: string }) =>
     request<any>(`/matches/${matchId}/reactions`, {
@@ -532,7 +521,9 @@ export const api = {
       body: JSON.stringify(data),
     }),
   getReactions: (matchId: string, deliveryId?: string) =>
-    request<{ data: any[] }>(`/matches/${matchId}/reactions${deliveryId ? `?deliveryId=${deliveryId}` : ''}`),
+    request<{ data: Array<{ deliveryId: string; emoji: string; count: number }> }>(
+      `/matches/${matchId}/reactions${deliveryId ? `?deliveryId=${deliveryId}` : ''}`,
+    ),
 
   // Player Form
   getPlayerForm: (playerId: string) =>

@@ -1,7 +1,21 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type { Commentary, PredictionEvent, StatusEvent, DLSUpdateEvent } from '@cricket/shared';
+import type {
+  Commentary,
+  PredictionEvent,
+  StatusEvent,
+  DLSUpdateEvent,
+  DeliveryEvent,
+  WicketEvent,
+} from '@cricket/shared';
 import { joinMatch, leaveMatch, getSocket, WS_EVENTS } from '../lib/socket';
+import {
+  patchCommentaryCache,
+  patchMatchCache,
+  patchMatchStatus,
+  refetchMatchCache,
+  type WsDeliveryPayload,
+} from '../lib/match-cache';
 import { useScoringStore } from '../stores/scoring-store';
 
 export interface MilestoneToast {
@@ -34,22 +48,29 @@ export function useMatchSocket(matchId: string | undefined) {
     const statusEvent = WS_EVENTS.status(matchId);
     const dlsEvent = WS_EVENTS.dlsUpdate(matchId);
 
-    const onDelivery = (data: { commentary?: Commentary }) => {
-      updateFromDelivery(data);
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-      if (data?.commentary) {
+    const applyDeliveryUpdate = (data: WsDeliveryPayload & { commentary?: Commentary }) => {
+      updateFromDelivery(data as Parameters<typeof updateFromDelivery>[0]);
+      const patchResult = patchMatchCache(queryClient, matchId, data);
+      if (patchResult === 'conflict') {
+        refetchMatchCache(queryClient, matchId);
+      }
+      if (data.commentary) {
+        patchCommentaryCache(queryClient, matchId, data.commentary);
         setLatestCommentary(data.commentary);
         setDeliveryVersion((v) => v + 1);
       }
     };
 
-    const onWicket = (data: unknown) => {
-      updateFromDelivery(data);
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+    const onDelivery = (data: WsDeliveryPayload & { commentary?: Commentary }) => {
+      applyDeliveryUpdate(data);
+    };
+
+    const onWicket = (data: WsDeliveryPayload & { commentary?: Commentary }) => {
+      applyDeliveryUpdate(data);
     };
 
     const onOver = () => {
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      refetchMatchCache(queryClient, matchId);
     };
 
     const onMilestone = (data: MilestoneToast) => {
@@ -67,12 +88,15 @@ export function useMatchSocket(matchId: string | undefined) {
       } else if (data.status === 'live') {
         setBreakStatus(null);
       }
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+      patchMatchStatus(queryClient, matchId, data.status);
+      if (data.status === 'completed' || data.status === 'abandoned') {
+        refetchMatchCache(queryClient, matchId);
+      }
     };
 
     const onDlsUpdate = (data: DLSUpdateEvent) => {
-      if (data.revisedTarget != null) {
-        setDlsTarget(data.revisedTarget);
+      if (data.revised_target != null) {
+        setDlsTarget(data.revised_target);
       }
     };
 

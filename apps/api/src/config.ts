@@ -88,6 +88,7 @@ const serverSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   ALLOWED_ORIGINS: z.string().default('http://localhost:5173'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  APP_VERSION: z.string().default('dev'),
 });
 
 // ── Combined Schema ─────────────────────────────────────────────────────────

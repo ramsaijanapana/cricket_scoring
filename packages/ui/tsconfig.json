@@ -3,7 +3,17 @@
   "compilerOptions": {
     "jsx": "react-jsx",
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "moduleSuffixes": [
+      ".web",
+      ""
+    ]
   },
-  "include": ["src"]
+  "include": [
+    "src"
+  ],
+  "exclude": [
+    "**/*.native.tsx",
+    "**/*.native.ts"
+  ]
 }

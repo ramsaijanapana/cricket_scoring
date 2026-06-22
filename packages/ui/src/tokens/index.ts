@@ -2,6 +2,7 @@ export { colors } from './colors';
 export { fontFamily, fontSize } from './typography';
 export { spacing } from './spacing';
 export { keyframes, animation } from './animations';
+export { motion } from './motion';
 export { shadows } from './shadows';
 export { theme } from './theme';
 export { cricketPreset } from './tailwind-preset';

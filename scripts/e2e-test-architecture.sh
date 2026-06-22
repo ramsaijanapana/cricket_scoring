@@ -259,6 +259,18 @@ REFRESH_TOKEN=$(json_get "$RESP" "refresh_token")
 
 echo ""
 
+# Scoring routes require scorer/admin (registered users are spectators).
+E2E_ADMIN_EMAIL="${E2E_ADMIN_EMAIL:-admin@cricscore.dev}"
+E2E_ADMIN_PASSWORD="${E2E_ADMIN_PASSWORD:-password123}"
+BODY=$(post_json "$API/auth/login" "{"email":"$E2E_ADMIN_EMAIL","password":"$E2E_ADMIN_PASSWORD"}")
+STATUS=$(get_status "$BODY")
+RESP=$(get_body "$BODY")
+assert_status "2.11 Login admin for scoring routes returns 200" "200" "$STATUS"
+ACCESS_TOKEN=$(json_get "$RESP" "access_token")
+assert_not_empty "2.11b Admin access_token present" "$ACCESS_TOKEN"
+
+echo ""
+
 ###############################################################################
 # Section 3: Scoring Flow — Full Match Simulation (15 tests)
 ###############################################################################
@@ -283,7 +295,7 @@ echo "    Team B ID: $TEAM_B_ID"
 # 3.3 Create 11 players for Team A
 TEAM_A_PLAYERS=()
 for i in $(seq 1 11); do
-  BODY=$(post_json "$API/players" "{\"firstName\":\"Tiger\",\"lastName\":\"Player${i}\"}")
+  BODY=$(post_json "$API/players" "{\"firstName\":\"Tiger\",\"lastName\":\"Player${i}\"}" -H "Authorization: Bearer $ACCESS_TOKEN")
   RESP=$(get_body "$BODY")
   PID=$(json_get "$RESP" "id")
   TEAM_A_PLAYERS+=("$PID")
@@ -294,7 +306,7 @@ echo "    Team A players created: ${#TEAM_A_PLAYERS[@]}"
 # 3.4 Create 11 players for Team B
 TEAM_B_PLAYERS=()
 for i in $(seq 1 11); do
-  BODY=$(post_json "$API/players" "{\"firstName\":\"Lion\",\"lastName\":\"Player${i}\"}")
+  BODY=$(post_json "$API/players" "{\"firstName\":\"Lion\",\"lastName\":\"Player${i}\"}" -H "Authorization: Bearer $ACCESS_TOKEN")
   RESP=$(get_body "$BODY")
   PID=$(json_get "$RESP" "id")
   TEAM_B_PLAYERS+=("$PID")
@@ -419,7 +431,7 @@ BODY=$(post_json "$API/matches/$MATCH_ID/deliveries" "{
   \"non_striker_id\":\"$NON_STRIKER_ID\",
   \"runs_batsman\":0,
   \"runs_extras\":1,
-  \"extra_type\":\"no_ball\",
+  \"extra_type\":\"noball\",
   \"wicket_type\":null,
   \"dismissed_player_id\":null,
   \"fielder_id\":null

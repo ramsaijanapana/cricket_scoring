@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { normalizeScoreSnapshot, type DeliveryEvent, type WicketEvent } from '@cricket/shared';
 
 export interface ScoringState {
   // Current match context
@@ -27,7 +28,7 @@ export interface ScoringState {
 
   // Actions
   setMatch: (matchId: string, inningsId: string) => void;
-  updateFromDelivery: (data: DeliveryEventData) => void;
+  updateFromDelivery: (data: DeliveryEvent | WicketEvent) => void;
   addRecentBall: (ball: BallDisplay) => void;
   clearRecentBalls: () => void;
   setSyncStatus: (status: 'synced' | 'pending' | 'offline', count?: number) => void;
@@ -38,16 +39,6 @@ export interface ScoringState {
 export interface BallDisplay {
   label: string;
   type: 'dot' | 'run' | 'four' | 'six' | 'wicket' | 'wide' | 'noball' | 'bye' | 'legbye';
-}
-
-export interface DeliveryEventData {
-  delivery: any;
-  scorecard_snapshot: {
-    innings_score: number;
-    innings_wickets: number;
-    innings_overs: string;
-    run_rate: number;
-  };
 }
 
 const initialState = {
@@ -73,13 +64,16 @@ export const useScoringStore = create<ScoringState>((set) => ({
   setMatch: (matchId, inningsId) =>
     set({ matchId, inningsId, recentBalls: [] }),
 
-  updateFromDelivery: (data) =>
+  updateFromDelivery: (data) => {
+    const snap = normalizeScoreSnapshot(data);
+    if (!snap) return;
     set({
-      inningsScore: data.scorecard_snapshot.innings_score,
-      inningsWickets: data.scorecard_snapshot.innings_wickets,
-      inningsOvers: data.scorecard_snapshot.innings_overs,
-      runRate: data.scorecard_snapshot.run_rate,
-    }),
+      inningsScore: snap.innings_score,
+      inningsWickets: snap.innings_wickets,
+      inningsOvers: snap.innings_overs,
+      runRate: snap.run_rate,
+    });
+  },
 
   addRecentBall: (ball) =>
     set((state) => ({

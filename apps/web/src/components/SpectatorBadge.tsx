@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eye } from 'lucide-react';
-import { getSocket } from '../lib/socket';
+import { api } from '../lib/api';
+import { getSocket, joinMatch, leaveMatch, WS_EVENTS } from '../lib/socket';
 
 interface SpectatorBadgeProps {
   matchId: string;
@@ -9,28 +10,38 @@ interface SpectatorBadgeProps {
 
 export function SpectatorBadge({ matchId }: SpectatorBadgeProps) {
   const [viewerCount, setViewerCount] = useState<number | null>(null);
-  const prevCount = useRef<number | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+
+    const loadInitialCount = async () => {
+      try {
+        const { count } = await api.getMatchPresence(matchId);
+        if (!cancelled) setViewerCount(count);
+      } catch {
+        if (!cancelled) setViewerCount(0);
+      }
+    };
+
+    void loadInitialCount();
+
     const socket = getSocket();
     if (!socket.connected) socket.connect();
+    joinMatch(matchId);
 
-    // Join the match room (idempotent if already joined by ScoringPage)
-    socket.emit('join_match', { match_id: matchId });
-
-    const presenceEvent = `match:${matchId}:presence`;
-
-    const handlePresence = (data: { viewers: number }) => {
-      prevCount.current = viewerCount;
-      setViewerCount(data.viewers);
+    const handlePresence = (data: { matchId: string; count: number }) => {
+      if (data.matchId !== matchId) return;
+      setViewerCount(data.count);
     };
 
-    socket.on(presenceEvent, handlePresence);
+    socket.on(WS_EVENTS.presenceUpdate, handlePresence);
 
     return () => {
-      socket.off(presenceEvent, handlePresence);
+      cancelled = true;
+      socket.off(WS_EVENTS.presenceUpdate, handlePresence);
+      leaveMatch(matchId);
     };
-  }, [matchId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [matchId]);
 
   if (viewerCount === null) return null;
 
@@ -56,7 +67,7 @@ export function SpectatorBadge({ matchId }: SpectatorBadgeProps) {
           {viewerCount}
         </motion.span>
       </AnimatePresence>
-      <span className="text-theme-muted">watching</span>
+      <span className="text-theme-secondary">watching</span>
     </motion.div>
   );
 }

@@ -17,7 +17,7 @@ export function initSentry(): void {
   Sentry.init({
     dsn,
     environment: env.NODE_ENV,
-    release: process.env.APP_VERSION || `api@${process.env.npm_package_version || '0.0.0'}`,
+    release: `api@${env.APP_VERSION}`,
     tracesSampleRate: env.NODE_ENV === 'production' ? 0.2 : 1.0,
     // Don't send expected errors (validation, auth, not-found)
     beforeSend(event, hint) {

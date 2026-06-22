@@ -195,7 +195,6 @@ jobs:
           JWT_SECRET=${PRODUCTION_JWT_SECRET:-production-jwt-secret-at-least-32-characters-long}
           JWT_REFRESH_SECRET=${PRODUCTION_JWT_REFRESH_SECRET:-production-refresh-secret-at-least-32-chars}
           ALLOWED_ORIGINS=${PRODUCTION_ALLOWED_ORIGINS:-http://localhost:8080}
-          API_PORT=3001
           WEB_PORT=${WEB_PORT}
           APP_VERSION=${IMAGE_TAG}
           EOF

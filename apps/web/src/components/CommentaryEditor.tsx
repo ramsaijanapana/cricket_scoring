@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Pencil, Check, X } from 'lucide-react';
 import type { Commentary } from '@cricket/shared';
 import { api } from '../lib/api';
@@ -11,34 +11,42 @@ interface CommentaryEditorProps {
   commentary: Commentary | null;
   /** Called externally when the next delivery is submitted to auto-close the editor */
   deliveryVersion: number;
+  onSaved?: (updated: Commentary) => void;
 }
 
-export function CommentaryEditor({ matchId, commentary, deliveryVersion }: CommentaryEditorProps) {
+export function CommentaryEditor({ matchId, commentary, deliveryVersion, onSaved }: CommentaryEditorProps) {
   const prefersReducedMotion = useReducedMotion();
   const reduceMotion = !!prefersReducedMotion;
   const [isEditing, setIsEditing] = useState(false);
+  const queryClient = useQueryClient();
   const [editText, setEditText] = useState('');
+  const [savedText, setSavedText] = useState<string | null>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto-close editor when new delivery arrives
   useEffect(() => {
     setIsEditing(false);
+    setSavedText(null);
   }, [deliveryVersion]);
 
   // Update edit text when commentary changes
   useEffect(() => {
     if (commentary) {
       setEditText(commentary.text);
+      setSavedText(null);
     }
-  }, [commentary?.id]);
+  }, [commentary?.id, commentary?.text]);
 
   const mutation = useMutation({
     mutationFn: (text: string) => {
       if (!commentary) throw new Error('No commentary to update');
       return api.updateCommentary(matchId, commentary.id, { text });
     },
-    onSuccess: () => {
+    onSuccess: (updated) => {
       setIsEditing(false);
+      setSavedText(updated.text);
+      queryClient.invalidateQueries({ queryKey: ['commentary', matchId] });
+      onSaved?.(updated);
     },
   });
 
@@ -64,6 +72,8 @@ export function CommentaryEditor({ matchId, commentary, deliveryVersion }: Comme
 
   if (!commentary) return null;
 
+  const displayText = savedText ?? commentary.text;
+
   return (
     <AnimatePresence mode="wait">
       <motion.div
@@ -82,7 +92,7 @@ export function CommentaryEditor({ matchId, commentary, deliveryVersion }: Comme
               <div className="flex items-center gap-1.5 mb-1">
                 <span
                   className="text-[9px] font-bold tabular-nums px-1.5 py-0.5 rounded-md"
-                  style={{ background: 'rgba(22, 163, 74, 0.08)', color: 'var(--color-green, #16a34a)' }}
+                  style={{ background: 'color-mix(in srgb, var(--color-green) 8%, transparent)', color: 'var(--color-green)' }}
                 >
                   {commentary.overBall}
                 </span>
@@ -91,7 +101,7 @@ export function CommentaryEditor({ matchId, commentary, deliveryVersion }: Comme
                 </span>
               </div>
               <p className="text-xs text-theme-secondary leading-relaxed">
-                {mutation.isSuccess && mutation.data ? (mutation.data as Commentary).text : commentary.text}
+                {displayText}
               </p>
             </div>
             <motion.button

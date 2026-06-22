@@ -1,0 +1,61 @@
+name: Post-deploy smoke
+
+# Manual post-deploy verification against a live environment.
+# Wire this into deploy.yml (needs: [deploy-production]) once production hosts are stable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: Deployed site base URL (e.g. https://staging.example.com)
+        required: true
+        type: string
+      environment:
+        description: Target environment
+        required: true
+        type: choice
+        options:
+          - staging
+          - production
+
+jobs:
+  smoke:
+    name: Post-deploy smoke — ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Health check via nginx
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: |
+          echo "Checking ${BASE_URL}/health ..."
+          # TODO: enable once production URL is reachable from GitHub Actions runners
+          # for i in $(seq 1 12); do
+          #   if curl -sf "${BASE_URL}/health" | grep -q '"status":"ok"'; then
+          #     echo "Health check passed"
+          #     exit 0
+          #   fi
+          #   sleep 5
+          # done
+          # echo "Health check failed"
+          # exit 1
+          echo "STUB: health check skipped — set BASE_URL and uncomment curl loop above"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Playwright browser smoke (stub)
+        env:
+          BASE_URL: ${{ inputs.base_url }}
+        run: |
+          echo "STUB: Playwright smoke against ${BASE_URL}"
+          # TODO: uncomment when deployed env has test credentials / stable data
+          # npx playwright install --with-deps chromium
+          # PLAYWRIGHT_BASE_URL="${BASE_URL}" npm run test:e2e:playwright --workspace=@cricket/web
