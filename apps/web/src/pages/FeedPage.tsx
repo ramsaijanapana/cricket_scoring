@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Rss, UserPlus, UserMinus, Clock } from 'lucide-react';
+import { Rss, Clock, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 
 interface FeedItem {
@@ -21,11 +21,13 @@ interface FeedItem {
 export function FeedPage() {
   const [items, setItems] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
 
   const fetchFeed = useCallback(async (pageNum: number) => {
     try {
+      setError(false);
       const res = await api.getFeed(pageNum);
       if (pageNum === 1) {
         setItems(res.data);
@@ -34,7 +36,7 @@ export function FeedPage() {
       }
       setHasMore(res.data.length >= 20);
     } catch {
-      // Silently fail
+      if (pageNum === 1) setError(true);
     } finally {
       setLoading(false);
     }
@@ -85,6 +87,27 @@ export function FeedPage() {
     return (
       <div className="flex items-center justify-center py-16">
         <div className="text-sm text-[var(--text-muted)]">Loading feed...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="card py-12 text-center">
+          <p className="text-theme-muted text-sm mb-3">Failed to load feed.</p>
+          <button
+            onClick={() => {
+              setLoading(true);
+              setPage(1);
+              fetchFeed(1);
+            }}
+            className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-cricket-green text-white"
+          >
+            <RefreshCw size={14} />
+            Retry
+          </button>
+        </div>
       </div>
     );
   }

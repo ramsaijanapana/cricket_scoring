@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@cricket/shared": "*",
+    "@cricket/ui": "*",
     "@expo/vector-icons": "^14.0.4",
     "@react-navigation/native": "^7.0.0",
     "expo": "~52.0.0",

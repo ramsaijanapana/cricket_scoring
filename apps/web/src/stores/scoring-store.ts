@@ -32,6 +32,7 @@ export interface ScoringState {
   clearRecentBalls: () => void;
   setSyncStatus: (status: 'synced' | 'pending' | 'offline', count?: number) => void;
   setParticipants: (striker: string, nonStriker: string, bowler: string) => void;
+  reset: () => void;
 }
 
 export interface BallDisplay {
@@ -49,7 +50,7 @@ export interface DeliveryEventData {
   };
 }
 
-export const useScoringStore = create<ScoringState>((set) => ({
+const initialState = {
   matchId: null,
   inningsId: null,
   inningsScore: 0,
@@ -61,9 +62,13 @@ export const useScoringStore = create<ScoringState>((set) => ({
   strikerId: null,
   nonStrikerId: null,
   bowlerId: null,
-  recentBalls: [],
-  syncStatus: 'synced',
+  recentBalls: [] as BallDisplay[],
+  syncStatus: 'synced' as const,
   pendingCount: 0,
+};
+
+export const useScoringStore = create<ScoringState>((set) => ({
+  ...initialState,
 
   setMatch: (matchId, inningsId) =>
     set({ matchId, inningsId, recentBalls: [] }),
@@ -88,4 +93,6 @@ export const useScoringStore = create<ScoringState>((set) => ({
 
   setParticipants: (strikerId, nonStrikerId, bowlerId) =>
     set({ strikerId, nonStrikerId, bowlerId }),
+
+  reset: () => set(initialState),
 }));

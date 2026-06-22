@@ -1,11 +1,16 @@
 import { describe, it, expect } from 'vitest';
+import {
+  resolveStrikerRotation,
+  checkInningsCompletion,
+  scoringEngine,
+} from './scoring-engine';
 
 /**
  * Cricket Scoring Engine Tests
  *
  * These tests verify core cricket scoring logic without requiring a database.
- * We extract and test the pure functions (strike rotation, innings completion,
- * over completion detection, legal delivery classification, run rate calculation).
+ * Pure functions (strike rotation, innings completion) are imported from
+ * scoring-engine.ts; other helpers remain local for isolated unit tests.
  *
  * Cricket Rules Reference:
  * - 6 legal deliveries = 1 over
@@ -18,89 +23,6 @@ import { describe, it, expect } from 'vitest';
  * - All-out at 10 wickets
  * - Target chase: innings complete when target reached
  */
-
-// ─── Extract pure logic from ScoringEngine for testing ────────────────────
-
-function resolveStrikerRotation(
-  strikerId: string, nonStrikerId: string,
-  batsmanRuns: number, isWide: boolean,
-  isLegal: boolean, overCompleted: boolean,
-  isWicket: boolean, dismissedId?: string | null,
-): { newStrikerId: string; newNonStrikerId: string } {
-  let newStriker = strikerId;
-  let newNonStriker = nonStrikerId;
-
-  // Odd runs cause a swap
-  if (batsmanRuns % 2 === 1) {
-    [newStriker, newNonStriker] = [newNonStriker, newStriker];
-  }
-
-  // End of over causes a swap
-  if (overCompleted) {
-    [newStriker, newNonStriker] = [newNonStriker, newStriker];
-  }
-
-  // Wicket — dismissed player needs replacement
-  if (isWicket && dismissedId) {
-    if (dismissedId === newStriker) {
-      newStriker = 'PENDING_NEW_BATSMAN';
-    } else if (dismissedId === newNonStriker) {
-      newNonStriker = 'PENDING_NEW_BATSMAN';
-    }
-  }
-
-  return { newStrikerId: newStriker, newNonStrikerId: newNonStriker };
-}
-
-function checkInningsCompletion(
-  wickets: number, completedOverNumber: number | null,
-  maxOvers: number | null, runs: number, target: number | null,
-  maxWickets: number = 10,
-): boolean {
-  if (wickets >= maxWickets) return true;
-  if (completedOverNumber !== null && maxOvers !== null && completedOverNumber >= maxOvers) return true;
-  if (target !== null && runs >= target) return true;
-  return false;
-}
-
-/**
- * Calculate bonus points for first-class matches.
- */
-function calculateBonusPoints(
-  runsInFirst110Overs: number,
-  wicketsTaken: number,
-  format: string,
-): { battingBonus: number; bowlingBonus: number } {
-  if (format !== 'first_class' && format !== 'Test') {
-    return { battingBonus: 0, bowlingBonus: 0 };
-  }
-
-  let battingBonus = 0;
-  if (runsInFirst110Overs >= 350) battingBonus = 4;
-  else if (runsInFirst110Overs >= 300) battingBonus = 3;
-  else if (runsInFirst110Overs >= 250) battingBonus = 2;
-  else if (runsInFirst110Overs >= 200) battingBonus = 1;
-
-  let bowlingBonus = 0;
-  if (wicketsTaken >= 9) bowlingBonus = 4;
-  else if (wicketsTaken >= 7) bowlingBonus = 3;
-  else if (wicketsTaken >= 5) bowlingBonus = 2;
-  else if (wicketsTaken >= 3) bowlingBonus = 1;
-
-  return { battingBonus, bowlingBonus };
-}
-
-/**
- * Determine current powerplay phase based on over number (0-indexed).
- */
-function getCurrentPowerplay(
-  overNumber: number,
-  config: Array<{ phase: string; startOver: number; endOver: number; fieldingRestriction: number }> | null,
-): { phase: string; startOver: number; endOver: number; fieldingRestriction: number } | null {
-  if (!config || config.length === 0) return null;
-  const currentOver1Indexed = overNumber + 1;
-  return config.find(pp => currentOver1Indexed >= pp.startOver && currentOver1Indexed <= pp.endOver) ?? null;
-}
 
 function isLegalDelivery(extraType: string | null): boolean {
   return extraType !== 'wide' && extraType !== 'noball';
@@ -715,49 +637,49 @@ describe('ScoringEngine — Super Over Innings Completion', () => {
 
 describe('ScoringEngine — Bonus Points Calculation', () => {
   it('no bonus points for T20 format', () => {
-    expect(calculateBonusPoints(350, 10, 'T20')).toEqual({ battingBonus: 0, bowlingBonus: 0 });
+    expect(scoringEngine.calculateBonusPoints(350, 10, 'T20')).toEqual({ battingBonus: 0, bowlingBonus: 0 });
   });
 
   it('first-class: 200+ runs = 1 batting bonus', () => {
-    expect(calculateBonusPoints(210, 2, 'first_class').battingBonus).toBe(1);
+    expect(scoringEngine.calculateBonusPoints(210, 2, 'first_class').battingBonus).toBe(1);
   });
 
   it('first-class: 250+ runs = 2 batting bonus', () => {
-    expect(calculateBonusPoints(260, 2, 'first_class').battingBonus).toBe(2);
+    expect(scoringEngine.calculateBonusPoints(260, 2, 'first_class').battingBonus).toBe(2);
   });
 
   it('first-class: 300+ runs = 3 batting bonus', () => {
-    expect(calculateBonusPoints(310, 2, 'first_class').battingBonus).toBe(3);
+    expect(scoringEngine.calculateBonusPoints(310, 2, 'first_class').battingBonus).toBe(3);
   });
 
   it('first-class: 350+ runs = 4 batting bonus', () => {
-    expect(calculateBonusPoints(380, 2, 'first_class').battingBonus).toBe(4);
+    expect(scoringEngine.calculateBonusPoints(380, 2, 'first_class').battingBonus).toBe(4);
   });
 
   it('first-class: 3+ wickets = 1 bowling bonus', () => {
-    expect(calculateBonusPoints(100, 3, 'first_class').bowlingBonus).toBe(1);
+    expect(scoringEngine.calculateBonusPoints(100, 3, 'first_class').bowlingBonus).toBe(1);
   });
 
   it('first-class: 5+ wickets = 2 bowling bonus', () => {
-    expect(calculateBonusPoints(100, 6, 'first_class').bowlingBonus).toBe(2);
+    expect(scoringEngine.calculateBonusPoints(100, 6, 'first_class').bowlingBonus).toBe(2);
   });
 
   it('first-class: 7+ wickets = 3 bowling bonus', () => {
-    expect(calculateBonusPoints(100, 7, 'first_class').bowlingBonus).toBe(3);
+    expect(scoringEngine.calculateBonusPoints(100, 7, 'first_class').bowlingBonus).toBe(3);
   });
 
   it('first-class: 9+ wickets = 4 bowling bonus', () => {
-    expect(calculateBonusPoints(100, 10, 'first_class').bowlingBonus).toBe(4);
+    expect(scoringEngine.calculateBonusPoints(100, 10, 'first_class').bowlingBonus).toBe(4);
   });
 
   it('Test format also gets bonus points', () => {
-    const result = calculateBonusPoints(300, 5, 'Test');
+    const result = scoringEngine.calculateBonusPoints(300, 5, 'Test');
     expect(result.battingBonus).toBe(3);
     expect(result.bowlingBonus).toBe(2);
   });
 
   it('below thresholds: 0 bonus', () => {
-    expect(calculateBonusPoints(199, 2, 'first_class')).toEqual({ battingBonus: 0, bowlingBonus: 0 });
+    expect(scoringEngine.calculateBonusPoints(199, 2, 'first_class')).toEqual({ battingBonus: 0, bowlingBonus: 0 });
   });
 });
 
@@ -769,26 +691,26 @@ describe('ScoringEngine — Powerplay Detection', () => {
   ];
 
   it('over 0 (1st over, 0-indexed) is in Powerplay', () => {
-    expect(getCurrentPowerplay(0, t20Config)?.phase).toBe('Powerplay');
+    expect(scoringEngine.getCurrentPowerplay(0, t20Config)?.phase).toBe('Powerplay');
   });
 
   it('over 5 (6th over, 0-indexed) is in Powerplay', () => {
-    expect(getCurrentPowerplay(5, t20Config)?.phase).toBe('Powerplay');
+    expect(scoringEngine.getCurrentPowerplay(5, t20Config)?.phase).toBe('Powerplay');
   });
 
   it('over 6 (7th over, 0-indexed) is in Middle Overs', () => {
-    expect(getCurrentPowerplay(6, t20Config)?.phase).toBe('Middle Overs');
+    expect(scoringEngine.getCurrentPowerplay(6, t20Config)?.phase).toBe('Middle Overs');
   });
 
   it('over 15 (16th over, 0-indexed) is in Death Overs', () => {
-    expect(getCurrentPowerplay(15, t20Config)?.phase).toBe('Death Overs');
+    expect(scoringEngine.getCurrentPowerplay(15, t20Config)?.phase).toBe('Death Overs');
   });
 
   it('null config returns null', () => {
-    expect(getCurrentPowerplay(0, null)).toBeNull();
+    expect(scoringEngine.getCurrentPowerplay(0, null)).toBeNull();
   });
 
   it('empty config returns null', () => {
-    expect(getCurrentPowerplay(0, [])).toBeNull();
+    expect(scoringEngine.getCurrentPowerplay(0, [])).toBeNull();
   });
 });

@@ -9,7 +9,10 @@ import type {
   Partnership,
   BattingScorecard,
   BowlingScorecard,
+  CreateMatchInput,
 } from '@cricket/shared';
+
+export type { CreateMatchInput };
 
 // ─── Extended API response types ────────────────────────────────────────────
 // The API returns enriched objects with joined/computed fields beyond the base models.
@@ -57,16 +60,6 @@ export interface InningsScorecard {
   bowlingTeamName?: string;
   extras: InningsExtras;
   fallOfWickets?: FallOfWicket[];
-}
-
-export interface CreateMatchInput {
-  formatConfigId: string;
-  venue?: string;
-  city?: string;
-  homeTeamId: string;
-  awayTeamId: string;
-  homePlayingXi: string[];
-  awayPlayingXi: string[];
 }
 
 export interface CreateTeamInput {
@@ -212,6 +205,19 @@ export interface AccountDeletionResponse {
 
 // ─── Auth ───────────────────────────────────────────────────────────────────
 
+export interface LoginResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_in: number;
+}
+
+export interface WebUser {
+  id: string;
+  email: string;
+  displayName: string;
+  role: string;
+}
+
 function getAuthHeaders(): Record<string, string> {
   const token = localStorage.getItem('access_token');
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -221,8 +227,54 @@ export function setAuthToken(token: string) {
   localStorage.setItem('access_token', token);
 }
 
+export function setRefreshToken(token: string) {
+  localStorage.setItem('refresh_token', token);
+}
+
+export function setUserId(userId: string) {
+  localStorage.setItem('user_id', userId);
+}
+
 export function clearAuthToken() {
   localStorage.removeItem('access_token');
+}
+
+export function clearAuth() {
+  clearAuthToken();
+  localStorage.removeItem('refresh_token');
+  localStorage.removeItem('user_id');
+}
+
+/** Decode JWT payload (client-side, no signature verification). */
+export function parseJwtPayload(token: string): { sub: string; email?: string } | null {
+  try {
+    const segment = token.split('.')[1];
+    if (!segment) return null;
+    const json = atob(segment.replace(/-/g, '+').replace(/_/g, '/'));
+    const payload = JSON.parse(json) as { sub?: string; email?: string };
+    return payload.sub ? { sub: payload.sub, email: payload.email } : null;
+  } catch {
+    return null;
+  }
+}
+
+let authRedirectInProgress = false;
+
+/** @internal Test helper — resets redirect guard between tests. */
+export function resetAuthRedirectState() {
+  authRedirectInProgress = false;
+}
+
+function handleUnauthorized(requestPath: string) {
+  if (requestPath.startsWith('/auth/')) return;
+  if (authRedirectInProgress) return;
+  if (typeof window !== 'undefined' && window.location.pathname === '/login') return;
+
+  authRedirectInProgress = true;
+  clearAuth();
+
+  const redirect = encodeURIComponent(window.location.pathname + window.location.search);
+  window.location.href = `/login?redirect=${redirect}`;
 }
 
 // ─── Fetch Helper ───────────────────────────────────────────────────────────
@@ -259,6 +311,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
       ? errPayload
       : errPayload?.message || `API error: ${res.status}`;
     const code = typeof errPayload === 'object' ? errPayload?.code : undefined;
+
+    if (res.status === 401) {
+      handleUnauthorized(path);
+    }
+
     throw new ApiError(message, res.status, code);
   }
 
@@ -269,6 +326,11 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 // ─── API Client ─────────────────────────────────────────────────────────────
 
 export const api = {
+  // Auth
+  login: (data: { email: string; password: string }) =>
+    request<LoginResponse>('/auth/login', { method: 'POST', body: JSON.stringify(data) }),
+  getMyProfile: () => request<WebUser>('/users/me'),
+
   // Matches
   getMatches: () => request<MatchDetail[]>('/matches'),
   getMatch: (id: string) => request<MatchDetail>(`/matches/${id}`),

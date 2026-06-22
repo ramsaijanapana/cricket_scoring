@@ -21,8 +21,9 @@ FROM node:20-alpine
 WORKDIR /app
 ENV NODE_ENV=production
 
-# Copy built output and production dependencies
+# Copy built output, SQL migrations, and production dependencies
 COPY --from=builder /app/apps/api/dist ./dist
+COPY --from=builder /app/apps/api/src/db/migrations ./dist/db/migrations
 COPY --from=builder /app/apps/api/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 

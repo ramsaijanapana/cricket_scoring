@@ -44,8 +44,8 @@ export async function registerRequestLogger(app: FastifyInstance): Promise<void>
       durationMs,
     };
 
-    if (user?.id) {
-      entry.userId = user.id;
+    if (user?.sub) {
+      entry.userId = user.sub;
     }
 
     const userAgent = request.headers['user-agent'];

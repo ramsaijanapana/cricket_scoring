@@ -2,6 +2,7 @@ import type { FastifyPluginAsync } from 'fastify';
 import { db } from '../db/index';
 import { auditLog } from '../db/schema/audit-log';
 import { eq, desc } from 'drizzle-orm';
+import { requireAuth, requireRole } from '../middleware/auth';
 
 function parsePagination(query: any): { page: number; limit: number; offset: number } {
   const page = Math.max(1, parseInt(query.page as string, 10) || 1);
@@ -18,7 +19,7 @@ export const auditLogRoutes: FastifyPluginAsync = async (app) => {
   app.get<{
     Params: { id: string };
     Querystring: { page?: string; limit?: string };
-  }>('/:id/audit-log', async (req) => {
+  }>('/:id/audit-log', { preHandler: [requireAuth, requireRole('admin', 'scorer')] }, async (req) => {
     const { limit, offset, page } = parsePagination(req.query);
 
     const rows = await db

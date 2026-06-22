@@ -36,6 +36,13 @@
       "when": 1775746330126,
       "tag": "0003_architecture_hardening",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1775832730126,
+      "tag": "0005_schema_reconciliation",
+      "breakpoints": true
     }
   ]
 }

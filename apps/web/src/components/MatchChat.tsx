@@ -70,6 +70,7 @@ export function MatchChat({ matchId }: MatchChatProps) {
     if (!roomId) return;
 
     const socket = getSocialSocket();
+    if (!socket) return;
 
     const handleMessage = (data: { roomId: string; message: ChatMessage }) => {
       if (data.roomId !== roomId) return;

@@ -3,8 +3,30 @@ version: "3.9"
 # ── Production Docker Compose ────────────────────────────────────────────────
 # Usage: docker compose -f docker-compose.prod.yml up -d
 # Requires: .env file with production secrets
+#
+# Run DB migrations before or after first deploy:
+#   docker compose -f docker-compose.prod.yml run --rm migrate
 
 services:
+  # ── DB migrations (one-shot init) ──────────────────────────────────────────
+  migrate:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: cricscore_migrate
+    profiles:
+      - migrate
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "dist/db/migrate.js"]
+    restart: "no"
+
   # ── API Server ─────────────────────────────────────────────────────────────
   api:
     build:
@@ -41,6 +63,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    # One-shot migrations: docker compose -f docker-compose.prod.yml run --rm migrate
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', r => { let d=''; r.on('data',c=>d+=c); r.on('end',()=>{ const h=JSON.parse(d); process.exit(h.status==='ok'?0:1) }) }).on('error',()=>process.exit(1))"]
       interval: 30s

@@ -75,6 +75,10 @@ const featureFlagSchema = z.object({
     .string()
     .default('true')
     .transform((v) => v === 'true'),
+  ALLOW_DEV_AUTH: z
+    .string()
+    .default('false')
+    .transform((v) => v === 'true'),
 });
 
 // ── Server ──────────────────────────────────────────────────────────────────
@@ -105,14 +109,27 @@ if (!parsed.success) {
     .map((issue) => `  - ${issue.path.join('.')}: ${issue.message}`)
     .join('\n');
 
+  const message = `Failed to validate environment variables:\n${formatted}`;
+  const isTestEnv = process.env.VITEST === 'true' || NODE_ENV === 'test';
+
+  if (isTestEnv) {
+    throw new Error(message);
+  }
+
   console.error('\n========================================');
   console.error(' ENVIRONMENT CONFIGURATION ERROR');
   console.error('========================================');
-  console.error(`Failed to validate environment variables:\n${formatted}`);
+  console.error(message);
   console.error('\nHint: copy .env.example to .env and fill in required values.');
   console.error('========================================\n');
 
   process.exit(1);
 }
 
-export const env = parsed.data;
+const data = parsed.data;
+
+export const env = {
+  ...data,
+  // Only allow dev auth bypass when explicitly enabled in development
+  ALLOW_DEV_AUTH: data.NODE_ENV === 'development' && data.ALLOW_DEV_AUTH,
+};

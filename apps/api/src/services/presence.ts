@@ -6,7 +6,10 @@
  * in realtime.ts.
  */
 
-import type { Server as SocketIOServer } from 'socket.io';
+import type { Server as SocketIOServer, Socket } from 'socket.io';
+import { resolveSocketIdentity, validateMatchRoomAccess, type SocketIdentity } from './socket-auth';
+
+type AuthenticatedSocket = Socket & { identity?: SocketIdentity | null };
 
 // ---------------------------------------------------------------------------
 // In-memory presence store
@@ -112,9 +115,14 @@ function removeSocket(socketId: string): string[] {
  * then broadcasts `presence:update` events to the match room.
  */
 export function attachPresenceTracking(io: SocketIOServer): void {
-  io.on('connection', (socket) => {
-    // Track when a client joins a match room
-    socket.on('join_match', ({ match_id }: { match_id: string }) => {
+  io.on('connection', (socket: AuthenticatedSocket) => {
+    socket.identity = resolveSocketIdentity(socket.handshake);
+
+    // Track when a client joins a match room (only after access validation)
+    socket.on('join_match', async ({ match_id }: { match_id: string }) => {
+      const allowed = await validateMatchRoomAccess(match_id, socket.identity ?? null);
+      if (!allowed) return;
+
       addToPresence(match_id, socket.id);
       const count = getPresenceCount(match_id);
 

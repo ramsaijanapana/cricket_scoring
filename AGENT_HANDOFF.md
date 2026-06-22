@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-04-06T01:11:48.127Z
+- Updated: 2026-06-22T14:13:08.018Z
 - Branch: main
-- Head: 416b773
-- Focus: npm command troubleshooting
+- Head: b3072f2
+- Focus: P1 sprint
 
 ## Latest Summary
 
-- Added PDF scorecard export - all 60 enhancements complete
+- Pre-push: 360 review P0/P1 complete, 168 tests, auth/schemas/sockets/infra fixes
 
 ## Next Steps
 
-- E2E testing and production deployment
+- P1 sprint: match start, deploy, E2E CI, ScoringPage split
 
 ## Risks / Watchouts
 
@@ -27,49 +27,70 @@
 
 ## Verification
 
-- Ran npm run context:status successfully.
-- Ran npm -v successfully and confirmed npm resolves to npm.ps1 plus npm.cmd via Get-Command and where.exe.
+- npm test 168/168
 
 ## Working Tree Snapshot
 
-- Changed files: 4
+- Changed files: 66
 - Staged files: 0
-- pps/api/package.json
-- apps/api/src/routes/scorecard.ts
-- apps/web/src/pages/ScorecardPage.tsx
-- package-lock.json
+- agent-context/state.json
+- .github/workflows/ci.yml
+- apps/api/Dockerfile
+- apps/api/package.json
+- apps/api/src/config.ts
+- apps/api/src/db/migrate.ts
+- apps/api/src/db/migrations/meta/_journal.json
+- apps/api/src/engine/scoring-engine.test.ts
+- apps/api/src/engine/scoring-engine.ts
+- apps/api/src/middleware/auth.ts
+- apps/api/src/middleware/request-logger.ts
+- apps/api/src/middleware/validation.ts
+- apps/api/src/routes/audit-log.ts
+- apps/api/src/routes/auth.ts
+- apps/api/src/routes/deliveries.ts
+- apps/api/src/server.ts
+- apps/api/src/services/presence.ts
+- apps/api/src/services/realtime.ts
+- apps/api/vitest.config.ts
+- apps/mobile/app/(tabs)/profile.tsx
+- +46 more changed files
 
 ## Recent Checkpoints
 
-### 2026-04-06T01:11:48.127Z — npm command troubleshooting
+### 2026-06-22T14:13:08.018Z — P1 sprint
 
-- Actor: ramsa
-- Summary: Added PDF scorecard export - all 60 enhancements complete
-- Next: E2E testing and production deployment
+- Actor: test
+- Summary: Pre-push: 360 review P0/P1 complete, 168 tests, auth/schemas/sockets/infra fixes
+- Next: P1 sprint: match start, deploy, E2E CI, ScoringPage split
+- Verified: npm test 168/168
 
-### 2026-04-06T01:02:13.550Z — npm command troubleshooting
+### 2026-06-22T04:10:30.343Z — A++ implementation roadmap
 
-- Actor: ramsa
-- Summary: Implemented all remaining features
-- Next: E2E testing
+- Actor: test
+- Summary: 360 review complete: 7 explore agents + 10 implement agents; P0/P1 fixes across api/web/mobile/shared/infra; 168+ tests passing
+- Next: P1: mobile match start flow, web ScoringPage split, deploy wiring, E2E phase2 in CI
+- Verified: npm test green across api+web
 
-### 2026-04-06T01:01:25.402Z — npm command troubleshooting
+### 2026-06-22T04:10:18.565Z — web test coverage
 
-- Actor: ramsa
-- Summary: Implemented all remaining stub features
-- Next: E2E testing, production deployment
+- Actor: test
+- Summary: Added offline-store unit tests with fake-indexeddb: queueDelivery, getPendingDeliveries, markSynced, markFailed retry cap
+- Next: E2E test web scoring flow; expand remaining web test coverage
+- Verified: apps/web npm test: 22/22 passed (6 new offline-store tests)
 
-### 2026-04-06T00:26:52.169Z — npm command troubleshooting
+### 2026-06-22T04:08:37.463Z — web auth UI
 
-- Actor: ramsa
-- Summary: Clean up stale worktree submodule
-- Next: Production deployment
+- Actor: test
+- Summary: Web auth UI P0: LoginPage with email/password login, /login route, 401 interceptor redirects to login, social-socket requires auth in prod, setSentryUser on login
+- Next: E2E test web login flow; add GET /users/me API endpoint
+- Verified: apps/web vitest: api.test.ts 9/9, scoring-store 7/7 passed
 
-### 2026-04-06T00:19:23.722Z — npm command troubleshooting
+### 2026-06-22T04:07:07.009Z — @cricket/ui adoption
 
-- Actor: ramsa
-- Summary: All 60 enhancements complete
-- Next: Production deployment
+- Actor: test
+- Summary: Adopted @cricket/ui in web and mobile: added dependency, tailwind presets use cricketPreset, thinned mobile theme.ts re-exports
+- Next: E2E test mobile scoring flow against live API
+- Verified: web/mobile typecheck run; tailwind CSS build passes; fixed green-light kebab alias in ui preset
 
 ## Workflow Rule
 

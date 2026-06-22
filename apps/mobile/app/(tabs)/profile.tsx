@@ -161,7 +161,13 @@ export default function ProfileScreen() {
         text: "Sign Out",
         style: "destructive",
         onPress: async () => {
+          try {
+            await api.logout();
+          } catch {
+            // Clear local session even if server logout fails
+          }
           await storage.removeToken();
+          await storage.removeRefreshToken();
           await storage.removeUser();
           setProfile(null);
           setIsGuest(true);
@@ -191,7 +197,10 @@ export default function ProfileScreen() {
           <Text className="mt-1 text-sm text-surface-400">
             Sign in to sync your data
           </Text>
-          <Pressable className="mt-4 rounded-lg bg-cricket-green px-6 py-2.5 active:opacity-80">
+          <Pressable
+            onPress={() => router.push("/login")}
+            className="mt-4 rounded-lg bg-cricket-green px-6 py-2.5 active:opacity-80"
+          >
             <Text className="font-semibold text-white">Sign In</Text>
           </Pressable>
         </View>

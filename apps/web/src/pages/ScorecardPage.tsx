@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Download, History, Loader2 } from 'lucide-react';
+import { ClipboardList, ArrowLeft, BarChart3, MessageSquare, Download, History, Loader2, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { CommentaryFeed } from '../components/CommentaryFeed';
 import { MatchChat } from '../components/MatchChat';
@@ -48,7 +48,7 @@ export function ScorecardPage() {
   const [activeTab, setActiveTab] = useState<ScorecardTab>('scorecard');
   const [pdfLoading, setPdfLoading] = useState(false);
 
-  const { data: scorecard, isLoading } = useQuery({
+  const { data: scorecard, isLoading, isError, refetch } = useQuery({
     queryKey: ['scorecard', matchId],
     queryFn: () => api.getScorecard(matchId!),
     enabled: !!matchId,
@@ -94,6 +94,26 @@ export function ScorecardPage() {
             </div>
           </div>
         ))}
+      </motion.div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        className="card py-12 text-center max-w-4xl mx-auto"
+      >
+        <p className="text-theme-muted text-sm mb-3">Failed to load scorecard.</p>
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-cricket-green text-white"
+        >
+          <RefreshCw size={14} />
+          Retry
+        </button>
       </motion.div>
     );
   }

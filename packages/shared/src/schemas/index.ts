@@ -41,13 +41,15 @@ export const deliveryInputSchema = z.object({
   non_striker_id: z.string().uuid(),
   runs_batsman: z.number().int().min(0).max(7),
   runs_extras: z.number().int().min(0).max(7).default(0),
-  extra_type: z.enum(['wide', 'no_ball', 'bye', 'leg_bye', 'penalty']).nullable().default(null),
+  extra_type: z.enum(['wide', 'noball', 'bye', 'legbye', 'penalty']).nullable().default(null),
+  is_wicket: z.boolean().default(false),
   wicket_type: z.enum([
     'bowled', 'caught', 'lbw', 'run_out', 'stumped',
     'hit_wicket', 'obstructing', 'timed_out', 'handled_ball', 'retired_hurt',
   ]).nullable().default(null),
   dismissed_player_id: z.string().uuid().nullable().default(null),
   fielder_id: z.string().uuid().nullable().default(null),
+  is_dead_ball: z.boolean().default(false),
   expected_stack_pos: z.number().int().optional(),
   client_id: z.string().uuid().optional(),
 });

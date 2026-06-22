@@ -1,6 +1,6 @@
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Monitor, Sun, Moon, LayoutList, Plus, Trophy, Settings, Rss } from 'lucide-react';
+import { Monitor, Sun, Moon, LayoutList, Plus, Trophy, Settings, Rss, Star, Medal } from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useTheme } from '../hooks/useTheme';
 import { NotificationBell } from './NotificationBell';
@@ -36,6 +36,13 @@ export function Layout() {
 
   return (
     <div className="min-h-screen flex flex-col bg-[var(--bg-primary)] text-[var(--text-primary)]">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-[100] focus:px-4 focus:py-2 focus:bg-cricket-green focus:text-white focus:rounded-xl focus:text-sm focus:font-semibold"
+      >
+        Skip to main content
+      </a>
+
       {/* Offline banner */}
       <AnimatePresence>
         {!isOnline && (
@@ -88,6 +95,12 @@ export function Layout() {
               <NavLink to="/feed" active={location.pathname === '/feed'} icon={<Rss size={16} />}>
                 Feed
               </NavLink>
+              <NavLink to="/fantasy" active={location.pathname.startsWith('/fantasy')} icon={<Star size={16} />}>
+                Fantasy
+              </NavLink>
+              <NavLink to="/records" active={location.pathname.startsWith('/records')} icon={<Medal size={16} />}>
+                Records
+              </NavLink>
               <NavLink to="/matches/new" active={location.pathname === '/matches/new'} accent icon={<Plus size={16} />}>
                 New
               </NavLink>
@@ -126,7 +139,7 @@ export function Layout() {
       </motion.header>
 
       {/* Main content */}
-      <main className="flex-1 max-w-[1280px] mx-auto w-full px-4 py-6">
+      <main id="main-content" className="flex-1 max-w-[1280px] mx-auto w-full px-4 py-6">
         <Outlet />
       </main>
 
@@ -165,7 +178,7 @@ function NavLink({
 
   return (
     <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-      <Link to={to} className={`${baseClasses} ${stateClasses}`}>
+      <Link to={to} className={`${baseClasses} ${stateClasses}`} aria-current={active ? 'page' : undefined}>
         {icon}
         {children}
       </Link>

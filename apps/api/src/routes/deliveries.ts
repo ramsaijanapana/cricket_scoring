@@ -515,7 +515,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
   app.delete<{
     Params: { id: string };
     Body: { inningsId: string };
-  }>('/:id/deliveries/last', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id/deliveries/last', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const result = await scoringEngine.undoLastBall(req.params.id, req.body.inningsId);
 
     if (!result.success) {
@@ -539,7 +539,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
   app.patch<{
     Params: { id: string; ballId: string };
     Body: Partial<DeliveryInput>;
-  }>('/:id/deliveries/:ballId', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id/deliveries/:ballId', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const result = await scoringEngine.correctDelivery(req.params.ballId, req.body);
 
     if (!result.success) {
@@ -549,59 +549,13 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
     return { success: true, newDeliveryId: result.newDeliveryId };
   });
 
-  // Batch undo — undo multiple balls from a given stack position onward
+  // Batch undo — disabled until scoring engine supports it
   app.delete<{
     Params: { id: string };
     Querystring: { from_stack_pos: string; inningsId: string };
-  }>('/:id/deliveries/batch', { preHandler: [requireAuth] }, async (req, reply) => {
-    const fromPos = parseInt(req.query.from_stack_pos, 10);
-    const inningsId = req.query.inningsId;
-    if (isNaN(fromPos)) {
-      return reply.status(400).send({ error: { code: 'VALIDATION_ERROR', message: 'from_stack_pos must be a number' } });
-    }
-
-    // Get all non-overridden deliveries at or after the position
-    const deliveriesToUndo = await db.query.delivery.findMany({
-      where: and(
-        eq(delivery.inningsId, inningsId),
-        eq(delivery.isOverridden, false),
-      ),
-      orderBy: [desc(delivery.undoStackPos)],
+  }>('/:id/deliveries/batch', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (_req, reply) => {
+    return reply.status(501).send({
+      error: { code: 'NOT_IMPLEMENTED', message: 'Batch undo is disabled pending engine support' },
     });
-
-    const toUndo = deliveriesToUndo.filter(d => d.undoStackPos >= fromPos);
-    if (toUndo.length === 0) {
-      return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'No deliveries to undo from that position' } });
-    }
-
-    // Mark all as overridden
-    for (const d of toUndo) {
-      await db.update(delivery).set({ isOverridden: true }).where(eq(delivery.id, d.id));
-    }
-
-    // Revert innings to snapshot before the batch
-    const remaining = deliveriesToUndo.find(d => d.undoStackPos < fromPos);
-    if (remaining) {
-      await db.update(innings).set({
-        totalRuns: remaining.inningsScore,
-        totalWickets: remaining.inningsWickets,
-        totalOvers: remaining.inningsOvers,
-      }).where(eq(innings.id, inningsId));
-    } else {
-      await db.update(innings).set({
-        totalRuns: 0, totalWickets: 0, totalOvers: '0.0', totalExtras: 0,
-      }).where(eq(innings.id, inningsId));
-    }
-
-    // Invalidate caches — batch undo changes the scorecard
-    cacheInvalidate(`match:${req.params.id}:live_score`);
-    cacheInvalidate(`match:${req.params.id}:scorecard`);
-
-    broadcast.status(req.params.id, {
-      status: 'batch_undo',
-      reason: `${toUndo.length} deliveries undone from position ${fromPos}`,
-    });
-
-    return { success: true, undoneCount: toUndo.length };
   });
 };

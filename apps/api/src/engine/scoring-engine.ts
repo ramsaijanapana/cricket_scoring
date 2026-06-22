@@ -64,6 +64,45 @@ export interface ScoringResult {
   dlsParScore: number | null;
 }
 
+export function resolveStrikerRotation(
+  strikerId: string, nonStrikerId: string,
+  batsmanRuns: number, isWide: boolean,
+  isLegal: boolean, overCompleted: boolean,
+  isWicket: boolean, dismissedId?: string | null,
+): { newStrikerId: string; newNonStrikerId: string } {
+  let newStriker = strikerId;
+  let newNonStriker = nonStrikerId;
+
+  if (batsmanRuns % 2 === 1) {
+    [newStriker, newNonStriker] = [newNonStriker, newStriker];
+  }
+
+  if (overCompleted) {
+    [newStriker, newNonStriker] = [newNonStriker, newStriker];
+  }
+
+  if (isWicket && dismissedId) {
+    if (dismissedId === newStriker) {
+      newStriker = 'PENDING_NEW_BATSMAN';
+    } else if (dismissedId === newNonStriker) {
+      newNonStriker = 'PENDING_NEW_BATSMAN';
+    }
+  }
+
+  return { newStrikerId: newStriker, newNonStrikerId: newNonStriker };
+}
+
+export function checkInningsCompletion(
+  wickets: number, completedOverNumber: number | null,
+  maxOvers: number | null, runs: number, target: number | null,
+  maxWickets: number = 10,
+): boolean {
+  if (wickets >= maxWickets) return true;
+  if (completedOverNumber !== null && maxOvers !== null && completedOverNumber >= maxOvers) return true;
+  if (target !== null && runs >= target) return true;
+  return false;
+}
+
 /**
  * Scoring Engine — core ball-by-ball logic.
  *
@@ -346,7 +385,7 @@ export class ScoringEngine {
         ? 1
         : context.formatConfig.oversPerInnings;
       const effectiveMaxWickets = context.inningsState.isSuperOver ? 2 : 10;
-      const inningsCompleted = this.checkInningsCompletion(
+      const inningsCompleted = checkInningsCompletion(
         newInningsWickets,
         overCompleted ? activeOver.overNumber + 1 : null,
         effectiveMaxOvers,
@@ -395,7 +434,7 @@ export class ScoringEngine {
       );
 
       // Striker rotation
-      const { newStrikerId, newNonStrikerId } = this.resolveStrikerRotation(
+      const { newStrikerId, newNonStrikerId } = resolveStrikerRotation(
         input.strikerId, input.nonStrikerId,
         input.runsBatsman, input.extraType === 'wide',
         isLegal, overCompleted,
@@ -469,6 +508,9 @@ export class ScoringEngine {
       });
 
       if (!lastDelivery) return { success: false };
+
+      const context = await this.getContext(matchId, inningsId, tx);
+      const ballsPerOver = context.formatConfig.ballsPerOver;
 
       // Mark as overridden (immutable — never delete)
       await tx.update(delivery).set({
@@ -592,8 +634,8 @@ export class ScoringEngine {
           if (currentBalls > 0) {
             newOversBowled = `${completedOvers}.${currentBalls - 1}`;
           } else if (completedOvers > 0) {
-            // Roll back from X.0 to (X-1).5
-            newOversBowled = `${completedOvers - 1}.5`;
+            // Roll back from X.0 to (X-1).(ballsPerOver-1)
+            newOversBowled = `${completedOvers - 1}.${ballsPerOver - 1}`;
           } else {
             newOversBowled = '0.0';
           }
@@ -605,8 +647,8 @@ export class ScoringEngine {
         const oversParts = String(newOversBowled).split('.');
         const oversWhole = parseInt(oversParts[0], 10) || 0;
         const oversBalls = parseInt(oversParts[1], 10) || 0;
-        const totalBallsBowled = oversWhole * 6 + oversBalls;
-        const economyRate = totalBallsBowled > 0 ? ((newRunsConceded / totalBallsBowled) * 6).toFixed(2) : '0.00';
+        const totalBallsBowled = oversWhole * ballsPerOver + oversBalls;
+        const economyRate = totalBallsBowled > 0 ? ((newRunsConceded / totalBallsBowled) * ballsPerOver).toFixed(2) : '0.00';
 
         await tx.update(bowlingScorecard).set({
           oversBowled: newOversBowled,
@@ -709,7 +751,7 @@ export class ScoringEngine {
           const wasMaiden = overRecord.maidens;
           // If the over was marked as maiden and we're undoing the completing ball,
           // revert the maiden flag. The over is no longer complete after undo.
-          const revertMaiden = wasMaiden && isLegal && overRecord.legalBalls >= 6;
+          const revertMaiden = wasMaiden && isLegal && overRecord.legalBalls >= ballsPerOver;
 
           await tx.update(over).set({
             legalBalls: newLegalBalls,
@@ -780,48 +822,6 @@ export class ScoringEngine {
   }
 
   // ─── Private Helpers ─────────────────────────────────────────────────────
-
-  private resolveStrikerRotation(
-    strikerId: string, nonStrikerId: string,
-    batsmanRuns: number, isWide: boolean,
-    isLegal: boolean, overCompleted: boolean,
-    isWicket: boolean, dismissedId?: string | null,
-  ): { newStrikerId: string; newNonStrikerId: string } {
-    let newStriker = strikerId;
-    let newNonStriker = nonStrikerId;
-
-    // Odd runs cause a swap
-    if (batsmanRuns % 2 === 1) {
-      [newStriker, newNonStriker] = [newNonStriker, newStriker];
-    }
-
-    // End of over causes a swap
-    if (overCompleted) {
-      [newStriker, newNonStriker] = [newNonStriker, newStriker];
-    }
-
-    // Wicket — dismissed player needs replacement
-    if (isWicket && dismissedId) {
-      if (dismissedId === newStriker) {
-        newStriker = 'PENDING_NEW_BATSMAN';
-      } else if (dismissedId === newNonStriker) {
-        newNonStriker = 'PENDING_NEW_BATSMAN';
-      }
-    }
-
-    return { newStrikerId: newStriker, newNonStrikerId: newNonStriker };
-  }
-
-  private checkInningsCompletion(
-    wickets: number, completedOverNumber: number | null,
-    maxOvers: number | null, runs: number, target: number | null,
-    maxWickets: number = 10,
-  ): boolean {
-    if (wickets >= maxWickets) return true;
-    if (completedOverNumber !== null && maxOvers !== null && completedOverNumber >= maxOvers) return true;
-    if (target !== null && runs >= target) return true;
-    return false;
-  }
 
   private async checkMatchCompletion(matchId: string, inningsPerSide: number, tx: TxOrDb = db): Promise<boolean> {
     const allInnings = await tx.query.innings.findMany({
@@ -954,6 +954,24 @@ export class ScoringEngine {
           ? input.fielderIds[0] : null,
         didNotBat: false,
       });
+    }
+
+    // Non-striker dismissal (e.g., run-out of backing-up batsman)
+    if (input.isWicket && input.dismissedId && input.dismissedId !== input.strikerId) {
+      const dismissedCard = await tx.query.battingScorecard.findFirst({
+        where: and(
+          eq(battingScorecard.inningsId, inningsId),
+          eq(battingScorecard.playerId, input.dismissedId),
+        ),
+      });
+      if (dismissedCard) {
+        await tx.update(battingScorecard).set({
+          isOut: true,
+          dismissalType: input.wicketType,
+          dismissedById: this.isBowlerWicket(input.wicketType) ? input.bowlerId : null,
+          fielderId: input.fielderIds?.[0] ?? dismissedCard.fielderId,
+        }).where(eq(battingScorecard.id, dismissedCard.id));
+      }
     }
   }
 

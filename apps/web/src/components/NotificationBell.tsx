@@ -35,6 +35,7 @@ export function NotificationBell() {
   // Listen for real-time notifications via Socket.IO /social namespace
   useEffect(() => {
     const socket = getSocialSocket();
+    if (!socket) return;
 
     const handleNewNotification = (data: Notification) => {
       setUnreadCount((c) => c + 1);

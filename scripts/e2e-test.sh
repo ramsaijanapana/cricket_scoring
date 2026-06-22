@@ -67,24 +67,32 @@ post() {
   curl -s -w "\n%{http_code}" -X POST "$1" -H "Content-Type: application/json" -d "$2" 2>/dev/null
 }
 
+post_auth() {
+  curl -s -w "\n%{http_code}" -X POST "$1" -H "Content-Type: application/json" -H "Authorization: Bearer $ACCESS_TOKEN" -d "$2" 2>/dev/null
+}
+
 get() {
   curl -s -w "\n%{http_code}" "$1" 2>/dev/null
+}
+
+get_auth() {
+  curl -s -w "\n%{http_code}" -H "Authorization: Bearer $ACCESS_TOKEN" "$1" 2>/dev/null
 }
 
 patch_req() {
   curl -s -w "\n%{http_code}" -X PATCH "$1" -H "Content-Type: application/json" -d "$2" 2>/dev/null
 }
 
+patch_auth() {
+  curl -s -w "\n%{http_code}" -X PATCH "$1" -H "Content-Type: application/json" -H "Authorization: Bearer $ACCESS_TOKEN" -d "$2" 2>/dev/null
+}
+
 del() {
   curl -s -w "\n%{http_code}" -X DELETE "$1" -H "Content-Type: application/json" ${2:+-d "$2"} 2>/dev/null
 }
 
-del_with_header() {
-  curl -s -w "\n%{http_code}" -X DELETE "$1" -H "$2" 2>/dev/null
-}
-
-get_with_header() {
-  curl -s -w "\n%{http_code}" -H "$2" "$1" 2>/dev/null
+del_auth() {
+  curl -s -w "\n%{http_code}" -X DELETE "$1" -H "Content-Type: application/json" -H "Authorization: Bearer $ACCESS_TOKEN" ${2:+-d "$2"} 2>/dev/null
 }
 
 # ---------- Verify API is running --------------------------------------------
@@ -155,6 +163,13 @@ RAW=$(post "$API/auth/logout" "{\"refresh_token\":\"$NEW_REFRESH\"}")
 split_response "$RAW"
 assert_status "POST /auth/logout returns 204" "204" "$STATUS"
 
+# Re-login for protected route tests (mirrors e2e-test-architecture.sh)
+RAW=$(post "$API/auth/login" "{\"email\":\"$UNIQUE_EMAIL\",\"password\":\"Test1234!\"}")
+split_response "$RAW"
+assert_status "Re-login after logout returns 200" "200" "$STATUS"
+ACCESS_TOKEN=$(json_get "$BODY" "access_token")
+REFRESH_TOKEN=$(json_get "$BODY" "refresh_token")
+
 echo ""
 
 ###############################################################################
@@ -163,13 +178,13 @@ echo ""
 echo "--- 3. Team Management ---"
 
 TS=$(date +%s)
-RAW=$(post "$API/teams" "{\"name\":\"Mumbai Indians $TS\",\"teamType\":\"franchise\",\"shortName\":\"MI\",\"country\":\"India\"}")
+RAW=$(post_auth "$API/teams" "{\"name\":\"Mumbai Indians $TS\",\"teamType\":\"franchise\",\"shortName\":\"MI\",\"country\":\"India\"}")
 split_response "$RAW"
 assert_status "POST /teams (Team A) returns 201" "201" "$STATUS"
 TEAM_A_ID=$(extract_id "$BODY")
 echo "    -> Team A: $TEAM_A_ID"
 
-RAW=$(post "$API/teams" "{\"name\":\"Chennai Super Kings $TS\",\"teamType\":\"franchise\",\"shortName\":\"CSK\",\"country\":\"India\"}")
+RAW=$(post_auth "$API/teams" "{\"name\":\"Chennai Super Kings $TS\",\"teamType\":\"franchise\",\"shortName\":\"CSK\",\"country\":\"India\"}")
 split_response "$RAW"
 assert_status "POST /teams (Team B) returns 201" "201" "$STATUS"
 TEAM_B_ID=$(extract_id "$BODY")
@@ -196,7 +211,7 @@ B_NAMES=("David Warner" "Travis Head" "Marnus Labuschagne" "Steve Smith" "Glenn 
 for name in "${A_NAMES[@]}"; do
   FIRST=$(echo "$name" | awk '{print $1}')
   LAST=$(echo "$name" | awk '{$1=""; print substr($0,2)}')
-  RESP=$(curl -s -X POST "$API/players" -H "Content-Type: application/json" -d "{\"firstName\":\"$FIRST\",\"lastName\":\"$LAST\"}")
+  RESP=$(curl -s -X POST "$API/players" -H "Content-Type: application/json" -H "Authorization: Bearer $ACCESS_TOKEN" -d "{\"firstName\":\"$FIRST\",\"lastName\":\"$LAST\"}")
   PID=$(extract_id "$RESP")
   TEAM_A_XI+=("$PID")
 done
@@ -204,7 +219,7 @@ done
 for name in "${B_NAMES[@]}"; do
   FIRST=$(echo "$name" | awk '{print $1}')
   LAST=$(echo "$name" | awk '{$1=""; print substr($0,2)}')
-  RESP=$(curl -s -X POST "$API/players" -H "Content-Type: application/json" -d "{\"firstName\":\"$FIRST\",\"lastName\":\"$LAST\"}")
+  RESP=$(curl -s -X POST "$API/players" -H "Content-Type: application/json" -H "Authorization: Bearer $ACCESS_TOKEN" -d "{\"firstName\":\"$FIRST\",\"lastName\":\"$LAST\"}")
   PID=$(extract_id "$RESP")
   TEAM_B_XI+=("$PID")
 done
@@ -230,7 +245,7 @@ split_response "$RAW"
 assert_status "GET /format-configs returns 200" "200" "$STATUS"
 
 # Create custom format
-RAW=$(post "$API/format-configs" '{"name":"Club 35-Over","oversPerInnings":35,"inningsPerSide":2,"maxBowlerOvers":7,"ballsPerOver":6}')
+RAW=$(post_auth "$API/format-configs" '{"name":"Club 35-Over","oversPerInnings":35,"inningsPerSide":2,"maxBowlerOvers":7,"ballsPerOver":6}')
 split_response "$RAW"
 assert_status "POST /format-configs returns 201" "201" "$STATUS"
 assert_contains "Custom format has name" "$BODY" "Club 35-Over"
@@ -242,7 +257,7 @@ echo ""
 ###############################################################################
 echo "--- 6. Match Lifecycle ---"
 
-RAW=$(post "$API/matches" "{
+RAW=$(post_auth "$API/matches" "{
   \"formatConfigId\": \"t20\",
   \"venue\": \"Wankhede Stadium\",
   \"city\": \"Mumbai\",
@@ -264,13 +279,13 @@ assert_status "GET /matches/:id returns 200" "200" "$STATUS"
 assert_contains "Match is scheduled" "$BODY" "scheduled"
 
 # Toss
-RAW=$(post "$API/matches/$MATCH_ID/toss" "{\"winner_id\":\"$TEAM_A_ID\",\"decision\":\"bat\"}")
+RAW=$(post_auth "$API/matches/$MATCH_ID/toss" "{\"winner_id\":\"$TEAM_A_ID\",\"decision\":\"bat\"}")
 split_response "$RAW"
 assert_status "POST toss returns 200" "200" "$STATUS"
 assert_contains "Status is toss" "$BODY" "toss"
 
 # Start match
-RAW=$(post "$API/matches/$MATCH_ID/start" "{
+RAW=$(post_auth "$API/matches/$MATCH_ID/start" "{
   \"battingTeamId\": \"$TEAM_A_ID\",
   \"bowlingTeamId\": \"$TEAM_B_ID\",
   \"battingOrder\": [$A_XI_JSON]
@@ -300,7 +315,7 @@ echo "--- 7. Scoring (2 Overs) ---"
 
 score_ball() {
   local desc="$1" payload="$2" expect="${3:-}"
-  RAW=$(post "$API/matches/$MATCH_ID/deliveries" "$payload")
+  RAW=$(post_auth "$API/matches/$MATCH_ID/deliveries" "$payload")
   split_response "$RAW"
   assert_status "$desc - returns 201" "201" "$STATUS"
   if [ -n "$expect" ]; then
@@ -393,7 +408,7 @@ echo "--- 8. Undo ---"
 score_ball "Extra delivery for undo" \
   "{\"innings_num\":1,\"bowler_id\":\"$BOWLER1\",\"striker_id\":\"$BATTER2\",\"non_striker_id\":\"$BATTER3\",\"runs_batsman\":2,\"runs_extras\":0,\"is_wicket\":false,\"is_retired_hurt\":false}"
 
-RAW=$(del "$API/matches/$MATCH_ID/deliveries/last" "{\"inningsId\":\"$INNINGS_ID\"}")
+RAW=$(del_auth "$API/matches/$MATCH_ID/deliveries/last" "{\"inningsId\":\"$INNINGS_ID\"}")
 split_response "$RAW"
 assert_status "DELETE /deliveries/last returns 200" "200" "$STATUS"
 assert_contains "Undo success" "$BODY" "success"
@@ -426,7 +441,7 @@ echo ""
 ###############################################################################
 echo "--- 10. Interruption & Resume ---"
 
-RAW=$(post "$API/matches/$MATCH_ID/interruption" '{"reason":"rain"}')
+RAW=$(post_auth "$API/matches/$MATCH_ID/interruption" '{"reason":"rain"}')
 split_response "$RAW"
 assert_status "POST /interruption returns 200" "200" "$STATUS"
 assert_contains "Status is rain_delay" "$BODY" "rain_delay"
@@ -435,7 +450,7 @@ RAW=$(get "$API/matches/$MATCH_ID")
 split_response "$RAW"
 assert_contains "Match confirms rain_delay" "$BODY" "rain_delay"
 
-RAW=$(post "$API/matches/$MATCH_ID/resume" '{}')
+RAW=$(post_auth "$API/matches/$MATCH_ID/resume" '{}')
 split_response "$RAW"
 assert_status "POST /resume returns 200" "200" "$STATUS"
 assert_contains "Status back to live" "$BODY" "live"
@@ -455,7 +470,7 @@ LBW_DEL_ID=$(json_get "$BODY" "delivery.id")
 echo "    -> LBW delivery: $LBW_DEL_ID"
 
 # Create DRS review
-RAW=$(post "$API/matches/$MATCH_ID/reviews" "{
+RAW=$(post_auth "$API/matches/$MATCH_ID/reviews" "{
   \"deliveryId\": \"$LBW_DEL_ID\",
   \"reviewingTeamId\": \"$TEAM_A_ID\",
   \"inningsId\": \"$INNINGS_ID\"
@@ -467,7 +482,7 @@ REVIEW_ID=$(extract_id "$BODY")
 echo "    -> Review: $REVIEW_ID"
 
 # Update review outcome
-RAW=$(patch_req "$API/matches/$MATCH_ID/reviews/$REVIEW_ID" '{
+RAW=$(patch_auth "$API/matches/$MATCH_ID/reviews/$REVIEW_ID" '{
   "status": "overturned",
   "wicketReversed": true,
   "revisedDecision": {"is_wicket": false}
@@ -495,7 +510,7 @@ split_response "$RAW"
 assert_status "GET /commentary returns 200" "200" "$STATUS"
 
 # Substitution
-RAW=$(post "$API/matches/$MATCH_ID/substitutions" "{
+RAW=$(post_auth "$API/matches/$MATCH_ID/substitutions" "{
   \"teamId\": \"$TEAM_A_ID\",
   \"playerOutId\": \"${TEAM_A_XI[10]}\",
   \"playerInId\": \"${TEAM_A_XI[0]}\",
@@ -518,12 +533,12 @@ echo ""
 ###############################################################################
 echo "--- 13. GDPR ---"
 
-RAW=$(get_with_header "$API/users/me/export" "x-user-id: $AUTH_USER_ID")
+RAW=$(get_auth "$API/users/me/export")
 split_response "$RAW"
 assert_status "GET /users/me/export returns 200" "200" "$STATUS"
 assert_contains "Export has email" "$BODY" "email"
 
-RAW=$(del_with_header "$API/users/me" "x-user-id: $AUTH_USER_ID")
+RAW=$(del_auth "$API/users/me")
 split_response "$RAW"
 assert_status "DELETE /users/me returns 204" "204" "$STATUS"
 

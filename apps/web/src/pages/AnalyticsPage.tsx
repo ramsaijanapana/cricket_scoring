@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
-import { ArrowLeft, BarChart3, Activity, Target, CircleDot, Link2, Swords } from 'lucide-react';
+import { ArrowLeft, BarChart3, Activity, Target, CircleDot, Link2, Swords, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 import { WormChart } from '../components/charts/WormChart';
 import { ManhattanChart } from '../components/charts/ManhattanChart';
@@ -17,17 +17,23 @@ export function AnalyticsPage() {
   const { id: matchId } = useParams<{ id: string }>();
   const [inningsFilter, setInningsFilter] = useState<InningsFilter>('all');
 
-  const { data: matchData } = useQuery({
+  const { data: matchData, isError: matchError, refetch: refetchMatch } = useQuery({
     queryKey: ['match', matchId],
     queryFn: () => api.getMatch(matchId!),
     enabled: !!matchId,
   });
 
-  const { data: scorecard } = useQuery({
+  const { data: scorecard, isError: scorecardError, refetch: refetchScorecard } = useQuery({
     queryKey: ['scorecard', matchId],
     queryFn: () => api.getScorecard(matchId!),
     enabled: !!matchId,
   });
+
+  const isError = matchError || scorecardError;
+  const refetch = () => {
+    refetchMatch();
+    refetchScorecard();
+  };
 
   const { data: wormData, isLoading: wormLoading } = useQuery({
     queryKey: ['worm', matchId],
@@ -75,6 +81,26 @@ export function AnalyticsPage() {
 
   const teamNames = matchData?.teams?.map((t) => t.teamName) || [];
   const inningsCount = scorecard?.length || 0;
+
+  if (isError) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+        className="card py-12 text-center max-w-6xl mx-auto"
+      >
+        <p className="text-theme-muted text-sm mb-3">Failed to load analytics.</p>
+        <button
+          onClick={() => refetch()}
+          className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-cricket-green text-white"
+        >
+          <RefreshCw size={14} />
+          Retry
+        </button>
+      </motion.div>
+    );
+  }
 
   return (
     <motion.div

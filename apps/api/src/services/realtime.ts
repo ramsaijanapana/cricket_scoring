@@ -1,11 +1,16 @@
 import { Server as HttpServer } from 'http';
-import { Server as SocketIOServer, Namespace } from 'socket.io';
+import { Server as SocketIOServer, Namespace, Socket } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import Redis from 'ioredis';
 import { db } from '../db/index';
 import { chatMember } from '../db/schema/chat';
 import { eq, and } from 'drizzle-orm';
 import { env } from '../config';
+import {
+  resolveSocketIdentity,
+  validateMatchRoomAccess,
+  type SocketIdentity,
+} from './socket-auth';
 import type {
   ServerToClientEvents,
   ClientToServerEvents,
@@ -19,6 +24,8 @@ import type {
 
 let io: SocketIOServer | null = null;
 let socialNsp: Namespace | null = null;
+
+type AuthenticatedSocket = Socket & { identity?: SocketIdentity | null };
 
 /**
  * Initialize Socket.IO server with Redis adapter for horizontal scaling.
@@ -47,11 +54,20 @@ export async function initSocketIO(httpServer: HttpServer): Promise<SocketIOServ
     console.warn('Socket.IO Redis adapter failed, running in single-instance mode:', err);
   }
 
-  io.on('connection', (socket) => {
+  io.on('connection', (socket: AuthenticatedSocket) => {
+    // Optional identity for private match rooms; public matches allow anonymous spectators
+    socket.identity = resolveSocketIdentity(socket.handshake);
     console.log(`Client connected: ${socket.id}`);
 
     // Client joins a match room — context.md section 6.2
-    socket.on('join_match', ({ match_id }: { match_id: string }) => {
+    socket.on('join_match', async ({ match_id }: { match_id: string }) => {
+      const allowed = await validateMatchRoomAccess(match_id, socket.identity ?? null);
+      if (!allowed) {
+        socket.emit('error', { code: 'FORBIDDEN', message: 'Cannot join this match room' });
+        console.log(`${socket.id} denied join_match:${match_id}`);
+        return;
+      }
+
       socket.join(`match:${match_id}`);
       console.log(`${socket.id} joined match:${match_id}`);
     });
@@ -79,22 +95,20 @@ export async function initSocketIO(httpServer: HttpServer): Promise<SocketIOServ
   // --- /social namespace for chat & notifications ---
   socialNsp = io.of('/social');
 
-  socialNsp.on('connection', (socket) => {
-    // Authenticate via x-user-id header or auth token
-    const userId =
-      (socket.handshake.headers['x-user-id'] as string) ||
-      (socket.handshake.auth?.token as string) ||
-      null;
+  socialNsp.on('connection', (socket: AuthenticatedSocket) => {
+    const identity = resolveSocketIdentity(socket.handshake);
 
-    if (!userId) {
+    if (!identity) {
       console.log(`Social: rejected unauthenticated socket ${socket.id}`);
       socket.disconnect(true);
       return;
     }
 
+    const { userId } = identity;
+    socket.identity = identity;
+
     // Join personal notification room
     socket.join(`user:${userId}`);
-    (socket as any).userId = userId;
     console.log(`Social: ${socket.id} authenticated as ${userId}`);
 
     // Join a chat room

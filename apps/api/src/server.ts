@@ -46,6 +46,7 @@ import { initSentry, registerSentryErrorHandler, flushSentry } from './services/
 import { registerMetrics } from './middleware/metrics';
 import { registerApm } from './middleware/apm';
 import { registerRequestLogger } from './middleware/request-logger';
+import { requireAdminOrInternal } from './middleware/auth';
 import { getRedisClient } from './services/cache';
 import { attachPresenceTracking, getPresenceCount } from './services/presence';
 
@@ -213,18 +214,52 @@ async function buildApp() {
   });
 
   // Auth middleware — context.md section 6.4
-  // Skip auth for health check and auth endpoints; allow unauthenticated in dev mode
-  app.addHook('onRequest', async (request, reply) => {
-    const url = request.url;
-    if (url === '/health' || url === '/metrics' || url.startsWith('/apm/') || url.startsWith('/api/v1/auth') || url.startsWith('/api/v1/broadcaster') || url.startsWith('/docs')) return;
+  const isProduction = env.NODE_ENV === 'production';
 
+  function isPublicRoute(pathname: string, method: string): boolean {
+    if (pathname === '/health') return true;
+    if (pathname.startsWith('/api/v1/auth')) return true;
+    if (pathname.startsWith('/docs')) return true;
+
+    if (method === 'GET') {
+      if (/^\/api\/v1\/matches\/[^/]+\/scorecard(\/pdf)?$/.test(pathname)) return true;
+      if (/^\/api\/v1\/matches\/[^/]+\/innings\/[^/]+\/scorecard$/.test(pathname)) return true;
+      if (pathname.startsWith('/api/v1/analytics/')) return true;
+    }
+
+    return false;
+  }
+
+  app.addHook('onRequest', async (request, reply) => {
+    const pathname = request.url.split('?')[0];
     const authHeader = request.headers.authorization;
-    if (!authHeader) return; // Allow unauthenticated access (dev mode)
+
+    // Metrics and APM require admin or internal token
+    if (pathname === '/metrics' || pathname.startsWith('/apm/')) {
+      if (authHeader) {
+        try {
+          const decoded = await request.jwtVerify();
+          (request as any).user = decoded;
+        } catch {
+          // Fall through — requireAdminOrInternal may accept internal bearer token
+        }
+      }
+      return requireAdminOrInternal(request, reply);
+    }
+
+    if (isPublicRoute(pathname, request.method)) return;
+
+    if (!authHeader) {
+      if (isProduction) {
+        return reply.status(401).send({ error: 'Authentication required' });
+      }
+      return;
+    }
 
     try {
       const decoded = await request.jwtVerify();
       (request as any).user = decoded;
-    } catch (err) {
+    } catch {
       return reply.status(401).send({ error: 'Invalid token' });
     }
   });

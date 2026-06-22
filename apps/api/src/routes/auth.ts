@@ -81,7 +81,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
       // Generate email verification token
       const verifyToken = randomUUID();
       await redis.set(`verify:${verifyToken}`, user.id, 'EX', VERIFY_TOKEN_TTL_SECONDS);
-      request.log.info({ verifyToken, userId: user.id }, 'Email verification token generated (dev)');
+      request.log.info({ userId: user.id }, 'Email verification token generated');
       await sendVerificationEmail(email, verifyToken);
 
       return reply.status(201).send({ user: sanitizeUser({ ...user, emailVerified: false }) });
@@ -352,7 +352,7 @@ export const authRoutes: FastifyPluginAsync = async (app) => {
 
       const verifyToken = randomUUID();
       await redis.set(`verify:${verifyToken}`, user.id, 'EX', VERIFY_TOKEN_TTL_SECONDS);
-      request.log.info({ verifyToken, userId: user.id }, 'Verification token re-generated (dev)');
+      request.log.info({ userId: user.id }, 'Verification token re-generated');
       await sendVerificationEmail(email, verifyToken);
 
       return reply.send({ message: 'If email exists, verification link sent' });

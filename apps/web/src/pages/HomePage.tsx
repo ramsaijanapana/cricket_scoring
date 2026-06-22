@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Plus, Trophy, Zap } from 'lucide-react';
+import { Plus, Trophy, Zap, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api';
 
 const cardVariants = {
@@ -25,7 +25,7 @@ const skeletonVariants = {
 };
 
 export function HomePage() {
-  const { data: matches, isLoading } = useQuery({
+  const { data: matches, isLoading, isError, refetch } = useQuery({
     queryKey: ['matches'],
     queryFn: api.getMatches,
   });
@@ -130,6 +130,23 @@ export function HomePage() {
                 </div>
               </motion.div>
             ))}
+          </motion.div>
+        ) : isError ? (
+          <motion.div
+            key="error"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ type: 'spring', stiffness: 300, damping: 25 }}
+            className="card py-12 text-center"
+          >
+            <p className="text-theme-muted text-sm mb-3">Failed to load matches.</p>
+            <button
+              onClick={() => refetch()}
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-4 py-2 rounded-lg bg-cricket-green text-white"
+            >
+              <RefreshCw size={14} />
+              Retry
+            </button>
           </motion.div>
         ) : !matches?.length ? (
           <motion.div

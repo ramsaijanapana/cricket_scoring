@@ -2,6 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const KEYS = {
   AUTH_TOKEN: "@cricscore/auth_token",
+  REFRESH_TOKEN: "@cricscore/refresh_token",
   USER: "@cricscore/user",
   SETTINGS: "@cricscore/settings",
 } as const;
@@ -18,6 +19,18 @@ export const storage = {
 
   async removeToken(): Promise<void> {
     await AsyncStorage.removeItem(KEYS.AUTH_TOKEN);
+  },
+
+  async getRefreshToken(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.REFRESH_TOKEN);
+  },
+
+  async setRefreshToken(token: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.REFRESH_TOKEN, token);
+  },
+
+  async removeRefreshToken(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.REFRESH_TOKEN);
   },
 
   // User data

@@ -24,7 +24,14 @@ const cricketPreset = {
     },
     extend: {
       colors: {
-        cricket: colors.cricket,
+        cricket: {
+          green: colors.cricket.green,
+          'green-light': colors.cricket.greenLight,
+          gold: colors.cricket.gold,
+          red: colors.cricket.red,
+          blue: colors.cricket.blue,
+          purple: colors.cricket.purple,
+        },
         surface: colors.surface,
       },
       fontFamily: {

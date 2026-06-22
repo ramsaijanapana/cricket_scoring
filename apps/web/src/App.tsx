@@ -14,6 +14,7 @@ const FeedPage = lazy(() => import('./pages/FeedPage').then(m => ({ default: m.F
 const FantasyPage = lazy(() => import('./pages/FantasyPage').then(m => ({ default: m.FantasyPage })));
 const RecordsPage = lazy(() => import('./pages/RecordsPage').then(m => ({ default: m.RecordsPage })));
 const OverByOverPage = lazy(() => import('./pages/OverByOverPage').then(m => ({ default: m.OverByOverPage })));
+const LoginPage = lazy(() => import('./pages/LoginPage').then(m => ({ default: m.LoginPage })));
 
 function LoadingSpinner() {
   return (
@@ -73,6 +74,7 @@ export function App() {
   return (
     <Suspense fallback={<LoadingSpinner />}>
       <Routes>
+        <Route path="/login" element={<AnimatedPage><LoginPage /></AnimatedPage>} />
         <Route element={<Layout />}>
           <Route path="/" element={<AnimatedPage><HomePage /></AnimatedPage>} />
           <Route path="/matches/new" element={<AnimatedPage><CreateMatchPage /></AnimatedPage>} />

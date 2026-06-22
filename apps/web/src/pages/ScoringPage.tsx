@@ -233,6 +233,13 @@ export function ScoringPage() {
     }
   }, [matchData?.status, currentInnings?.id, completedInnings?.id]);
 
+  // Clear scoring store when leaving the page or switching matches
+  useEffect(() => {
+    return () => {
+      useScoringStore.getState().reset();
+    };
+  }, [matchId]);
+
   // WebSocket subscription
   useEffect(() => {
     if (!matchId) return;

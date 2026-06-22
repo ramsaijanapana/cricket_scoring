@@ -8,21 +8,25 @@ import {
 } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { MatchScoreHeader } from "../../../components/ScoreDisplay";
-import { api } from "../../../lib/api";
+import { api, type InningsScorecard } from "../../../lib/api";
 import { colors } from "../../../lib/theme";
-import type { BattingScorecard, BowlingScorecard } from "@cricket/shared";
 
 export default function ScorecardScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const [scorecard, setScorecard] = useState<any>(null);
+  const [scorecard, setScorecard] = useState<InningsScorecard[]>([]);
+  const [match, setMatch] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
   const fetchScorecard = async () => {
     if (!id) return;
     try {
-      const data = await api.getScorecard(id);
-      setScorecard(data);
+      const [scorecardData, matchData] = await Promise.all([
+        api.getScorecard(id),
+        api.getMatch(id),
+      ]);
+      setScorecard(Array.isArray(scorecardData) ? scorecardData : []);
+      setMatch(matchData);
     } catch {
       // fail silently
     } finally {
@@ -43,7 +47,7 @@ export default function ScorecardScreen() {
     );
   }
 
-  if (!scorecard) {
+  if (!scorecard.length) {
     return (
       <View className="flex-1 items-center justify-center bg-surface-900">
         <Text className="text-base text-surface-400">
@@ -53,8 +57,10 @@ export default function ScorecardScreen() {
     );
   }
 
-  const match = scorecard.match;
-  const innings = scorecard.innings ?? [];
+  const homeTeam = match?.teams?.find((t: any) => t.designation === "home");
+  const awayTeam = match?.teams?.find((t: any) => t.designation === "away");
+  const firstInnings = scorecard[0]?.innings;
+  const secondInnings = scorecard[1]?.innings;
 
   return (
     <ScrollView
@@ -78,31 +84,33 @@ export default function ScorecardScreen() {
             status={match.status}
             format={match.format}
             teamA={{
-              name: match.teamA?.name ?? "Team A",
-              score: innings[0]?.totalRuns ?? 0,
-              wickets: innings[0]?.totalWickets ?? 0,
-              overs: innings[0]?.totalOvers?.toString() ?? "0.0",
+              name: homeTeam?.teamName ?? "Home",
+              score: firstInnings?.totalRuns ?? 0,
+              wickets: firstInnings?.totalWickets ?? 0,
+              overs: firstInnings?.totalOvers?.toString() ?? "0.0",
             }}
             teamB={
-              innings[1]
+              secondInnings
                 ? {
-                    name: match.teamB?.name ?? "Team B",
-                    score: innings[1]?.totalRuns ?? 0,
-                    wickets: innings[1]?.totalWickets ?? 0,
-                    overs: innings[1]?.totalOvers?.toString() ?? "0.0",
+                    name: awayTeam?.teamName ?? "Away",
+                    score: secondInnings.totalRuns ?? 0,
+                    wickets: secondInnings.totalWickets ?? 0,
+                    overs: secondInnings.totalOvers?.toString() ?? "0.0",
                   }
                 : undefined
             }
-            result={match.result?.summary}
+            result={match.resultSummary ?? match.result?.summary}
           />
         </View>
       )}
 
       {/* Innings scorecards */}
-      {innings.map((inn: any, idx: number) => (
+      {scorecard.map((entry, idx) => {
+        const inn = entry.innings;
+        return (
         <View key={inn.id ?? idx} className="mb-6">
           <Text className="mb-3 text-lg font-bold text-white">
-            {inn.battingTeamName ?? `Innings ${idx + 1}`}
+            {entry.battingTeamName ?? `Innings ${idx + 1}`}
           </Text>
 
           {/* Batting table */}
@@ -130,7 +138,7 @@ export default function ScorecardScreen() {
             </View>
 
             {/* Rows */}
-            {(inn.batting ?? []).map((bat: any) => (
+            {(entry.batting ?? []).map((bat) => (
               <View
                 key={bat.playerId}
                 className="flex-row border-b border-surface-750 px-3 py-2"
@@ -181,7 +189,7 @@ export default function ScorecardScreen() {
           </View>
 
           {/* Bowling table */}
-          {(inn.bowling ?? []).length > 0 && (
+          {(entry.bowling ?? []).length > 0 && (
             <View className="mt-3 rounded-lg bg-surface-800">
               <View className="flex-row border-b border-surface-700 px-3 py-2">
                 <Text className="flex-1 text-xs font-semibold text-surface-400">
@@ -204,7 +212,7 @@ export default function ScorecardScreen() {
                 </Text>
               </View>
 
-              {(inn.bowling ?? []).map((bowl: any) => (
+              {entry.bowling.map((bowl) => (
                 <View
                   key={bowl.playerId}
                   className="flex-row border-b border-surface-750 px-3 py-2"
@@ -232,7 +240,8 @@ export default function ScorecardScreen() {
             </View>
           )}
         </View>
-      ))}
+        );
+      })}
     </ScrollView>
   );
 }

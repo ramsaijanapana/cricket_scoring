@@ -1,9 +1,20 @@
 import "../global.css";
+import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { View } from "react-native";
+import { initNotifications } from "../lib/notifications";
+import { startAutoSync, stopAutoSync } from "../lib/offline-sync";
 
 export default function RootLayout() {
+  useEffect(() => {
+    initNotifications().catch((err) => {
+      console.warn("[notifications] init failed:", err);
+    });
+    startAutoSync();
+    return () => stopAutoSync();
+  }, []);
+
   return (
     <View className="flex-1 bg-surface-900">
       <StatusBar style="light" />
@@ -27,6 +38,10 @@ export default function RootLayout() {
         <Stack.Screen
           name="matches/new"
           options={{ title: "New Match", presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="login"
+          options={{ title: "Sign In", presentation: "modal" }}
         />
         <Stack.Screen
           name="chat/[id]"

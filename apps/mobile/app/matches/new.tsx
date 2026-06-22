@@ -23,8 +23,8 @@ export default function NewMatchScreen() {
 
   const [format, setFormat] = useState<MatchFormat>("t20");
   const [venue, setVenue] = useState("");
-  const [teamAId, setTeamAId] = useState("");
-  const [teamBId, setTeamBId] = useState("");
+  const [homeTeamId, setHomeTeamId] = useState("");
+  const [awayTeamId, setAwayTeamId] = useState("");
 
   useEffect(() => {
     const fetchTeams = async () => {
@@ -32,8 +32,8 @@ export default function NewMatchScreen() {
         const data = await api.getTeams();
         setTeams(data);
         if (data.length >= 2) {
-          setTeamAId(data[0].id);
-          setTeamBId(data[1].id);
+          setHomeTeamId(data[0].id);
+          setAwayTeamId(data[1].id);
         }
       } catch {
         // fail silently
@@ -45,11 +45,11 @@ export default function NewMatchScreen() {
   }, []);
 
   const handleCreate = async () => {
-    if (!teamAId || !teamBId) {
+    if (!homeTeamId || !awayTeamId) {
       Alert.alert("Error", "Please select both teams");
       return;
     }
-    if (teamAId === teamBId) {
+    if (homeTeamId === awayTeamId) {
       Alert.alert("Error", "Teams must be different");
       return;
     }
@@ -57,10 +57,10 @@ export default function NewMatchScreen() {
     setSubmitting(true);
     try {
       const match = await api.createMatch({
-        format,
-        teamAId,
-        teamBId,
-        venue: venue || null,
+        formatConfigId: format,
+        homeTeamId,
+        awayTeamId,
+        venue: venue || undefined,
       });
       router.replace(`/matches/${match.id}/score`);
     } catch (err: any) {
@@ -118,14 +118,14 @@ export default function NewMatchScreen() {
               {teams.map((team) => (
                 <Pressable
                   key={team.id}
-                  onPress={() => setTeamAId(team.id)}
+                  onPress={() => setHomeTeamId(team.id)}
                   className={`rounded-lg px-4 py-2.5 ${
-                    teamAId === team.id ? "bg-cricket-green" : "bg-surface-800"
+                    homeTeamId === team.id ? "bg-cricket-green" : "bg-surface-800"
                   }`}
                 >
                   <Text
                     className={`text-sm font-semibold ${
-                      teamAId === team.id ? "text-white" : "text-surface-300"
+                      homeTeamId === team.id ? "text-white" : "text-surface-300"
                     }`}
                   >
                     {team.shortName || team.name}
@@ -148,14 +148,14 @@ export default function NewMatchScreen() {
               {teams.map((team) => (
                 <Pressable
                   key={team.id}
-                  onPress={() => setTeamBId(team.id)}
+                  onPress={() => setAwayTeamId(team.id)}
                   className={`rounded-lg px-4 py-2.5 ${
-                    teamBId === team.id ? "bg-cricket-green" : "bg-surface-800"
+                    awayTeamId === team.id ? "bg-cricket-green" : "bg-surface-800"
                   }`}
                 >
                   <Text
                     className={`text-sm font-semibold ${
-                      teamBId === team.id ? "text-white" : "text-surface-300"
+                      awayTeamId === team.id ? "text-white" : "text-surface-300"
                     }`}
                   >
                     {team.shortName || team.name}
@@ -184,9 +184,9 @@ export default function NewMatchScreen() {
       {/* Create button */}
       <Pressable
         onPress={handleCreate}
-        disabled={submitting || !teamAId || !teamBId}
+        disabled={submitting || !homeTeamId || !awayTeamId}
         className={`items-center rounded-xl py-4 ${
-          submitting || !teamAId || !teamBId
+          submitting || !homeTeamId || !awayTeamId
             ? "bg-surface-700"
             : "bg-cricket-green active:opacity-80"
         }`}

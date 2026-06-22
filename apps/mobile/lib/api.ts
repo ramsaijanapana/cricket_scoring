@@ -13,10 +13,43 @@ import type {
 
 // ─── Response types ─────────────────────────────────────────────────────────
 
-interface AuthResponse {
+/** Normalized auth tokens returned by login/refresh helpers */
+export interface AuthResponse {
   token: string;
   refreshToken: string;
-  user: AppUser;
+  expiresIn: number;
+}
+
+interface ApiAuthResponse {
+  access_token: string;
+  refresh_token: string;
+  expires_in?: number;
+}
+
+interface ApiMatchTeam {
+  teamId: string;
+  teamName: string;
+  designation: string;
+  playingXi?: string[];
+  playerNames?: Record<string, string>;
+}
+
+interface ApiMatchRaw extends Match {
+  teams?: ApiMatchTeam[];
+  homeTeamName?: string;
+  awayTeamName?: string;
+  homeTeamId?: string;
+  awayTeamId?: string;
+  currentScore?: string | null;
+  currentOvers?: string | null;
+  innings?: Array<{
+    battingTeamId: string;
+    totalRuns: number;
+    totalWickets: number;
+    totalOvers: string | number;
+  }>;
+  teamAScore?: MatchWithTeams["teamAScore"];
+  teamBScore?: MatchWithTeams["teamBScore"];
 }
 
 /** Enriched match returned by the API with joined team and score data */
@@ -35,20 +68,153 @@ export interface MatchWithTeams extends Match {
   };
 }
 
-interface ScorecardResponse {
-  match: Match;
-  innings: Array<{
-    innings: Innings;
-    batting: BattingScorecard[];
-    bowling: BowlingScorecard[];
-  }>;
+
+export interface InningsExtras {
+  total: number;
+  wides?: number;
+  noBalls?: number;
+  byes?: number;
+  legByes?: number;
+  penalties?: number;
+}
+
+export interface InningsScorecard {
+  innings: Innings;
+  batting: (BattingScorecard & { playerName?: string })[];
+  bowling: (BowlingScorecard & { playerName?: string })[];
+  battingTeamName?: string;
+  bowlingTeamName?: string;
+  extras: InningsExtras;
+}
+
+export interface RecordDeliveryInput {
+  innings_num: number;
+  bowler_id: string;
+  striker_id: string;
+  non_striker_id: string;
+  runs_batsman: number;
+  runs_extras?: number;
+  extra_type?: "wide" | "noball" | "bye" | "legbye" | "penalty" | null;
+  is_wicket?: boolean;
+  wicket_type?:
+    | "bowled"
+    | "caught"
+    | "lbw"
+    | "run_out"
+    | "stumped"
+    | "hit_wicket"
+    | "obstructing"
+    | "timed_out"
+    | "handled_ball"
+    | "retired_hurt"
+    | null;
+  dismissed_player_id?: string | null;
+  fielder_id?: string | null;
+  is_dead_ball?: boolean;
+  expected_stack_pos?: number;
+  client_id?: string;
 }
 
 interface PaginatedResponse<T> {
   data: T[];
-  page: number;
-  limit: number;
-  total?: number;
+  pagination?: {
+    page: number;
+    limit: number;
+    total?: number;
+    totalPages?: number;
+  };
+}
+
+function normalizeAuthResponse(raw: ApiAuthResponse): AuthResponse {
+  return {
+    token: raw.access_token,
+    refreshToken: raw.refresh_token,
+    expiresIn: raw.expires_in ?? 3600,
+  };
+}
+
+function parseScoreString(score: string | null | undefined) {
+  if (!score) return undefined;
+  const match = String(score).match(/^(\d+)\/(\d+)/);
+  if (!match) return undefined;
+  return {
+    totalRuns: parseInt(match[1], 10),
+    totalWickets: parseInt(match[2], 10),
+  };
+}
+
+function toTeamScore(
+  runs: number,
+  wickets: number,
+  overs: string | number | null | undefined,
+): NonNullable<MatchWithTeams["teamAScore"]> {
+  return {
+    totalRuns: runs,
+    totalWickets: wickets,
+    totalOvers:
+      typeof overs === "string" ? parseFloat(overs) || 0 : (overs ?? 0),
+  };
+}
+
+function normalizeMatch(raw: ApiMatchRaw): MatchWithTeams {
+  const teams = raw.teams ?? [];
+  const home = teams.find((t) => t.designation === "home");
+  const away = teams.find((t) => t.designation === "away");
+
+  const teamA: MatchWithTeams["teamA"] = {
+    id: home?.teamId ?? raw.homeTeamId ?? "",
+    name: home?.teamName ?? raw.homeTeamName ?? "Team A",
+    shortName: null,
+  };
+  const teamB: MatchWithTeams["teamB"] = {
+    id: away?.teamId ?? raw.awayTeamId ?? "",
+    name: away?.teamName ?? raw.awayTeamName ?? "Team B",
+    shortName: null,
+  };
+
+  let teamAScore = raw.teamAScore;
+  let teamBScore = raw.teamBScore;
+
+  if (raw.innings?.length) {
+    for (const inn of raw.innings) {
+      const score = toTeamScore(
+        inn.totalRuns,
+        inn.totalWickets,
+        inn.totalOvers,
+      );
+      if (inn.battingTeamId === teamA?.id) teamAScore = score;
+      else if (inn.battingTeamId === teamB?.id) teamBScore = score;
+    }
+  } else if (raw.currentScore) {
+    const parsed = parseScoreString(raw.currentScore);
+    if (parsed) {
+      const liveScore = {
+        ...parsed,
+        totalOvers: parseFloat(String(raw.currentOvers ?? "0")) || 0,
+      };
+      if (!teamAScore && !teamBScore) {
+        teamAScore = liveScore;
+      }
+    }
+  }
+
+  return { ...raw, teamA, teamB, teamAScore, teamBScore };
+}
+
+function unwrapPaginated<T>(payload: T[] | PaginatedResponse<T>): T[] {
+  if (Array.isArray(payload)) return payload;
+  return payload.data ?? [];
+}
+
+function parseApiError(body: Record<string, unknown>, status: number): string {
+  const errPayload = body.error;
+  if (typeof errPayload === "string") return errPayload;
+  if (errPayload && typeof errPayload === "object" && "message" in errPayload) {
+    const message = (errPayload as { message?: string }).message;
+    if (message) return message;
+  }
+  if (typeof body.message === "string") return body.message;
+  return `API error: ${status}`;
 }
 
 // ─── Request helper ─────────────────────────────────────────────────────────
@@ -70,8 +236,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   });
 
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(error.error || `API error: ${res.status}`);
+    const body = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(parseApiError(body, res.status));
   }
 
   if (res.status === 204) return {} as T;
@@ -83,26 +249,44 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 export const api = {
   // Auth
   register: (data: { email: string; password: string; displayName: string }) =>
-    request<AuthResponse>("/auth/register", {
+    request<{ user: AppUser }>("/auth/register", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  login: (data: { email: string; password: string }) =>
-    request<AuthResponse>("/auth/login", {
+  login: async (data: { email: string; password: string }) => {
+    const raw = await request<ApiAuthResponse>("/auth/login", {
       method: "POST",
       body: JSON.stringify(data),
-    }),
-  logout: () =>
-    request<void>("/auth/logout", { method: "POST" }),
-  refreshToken: (refreshToken: string) =>
-    request<AuthResponse>("/auth/refresh", {
+    });
+    return normalizeAuthResponse(raw);
+  },
+  logout: async () => {
+    const refreshToken = await storage.getRefreshToken();
+    if (!refreshToken) return;
+    await request<void>("/auth/logout", {
       method: "POST",
-      body: JSON.stringify({ refreshToken }),
-    }),
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  },
+  refreshToken: async (refreshToken: string) => {
+    const raw = await request<ApiAuthResponse>("/auth/refresh", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    return normalizeAuthResponse(raw);
+  },
 
   // Matches
-  getMatches: () => request<MatchWithTeams[]>("/matches"),
-  getMatch: (id: string) => request<MatchWithTeams>(`/matches/${id}`),
+  getMatches: async () => {
+    const raw = await request<MatchWithTeams[] | PaginatedResponse<ApiMatchRaw>>(
+      "/matches",
+    );
+    return unwrapPaginated(raw).map(normalizeMatch);
+  },
+  getMatch: async (id: string) => {
+    const raw = await request<ApiMatchRaw>(`/matches/${id}`);
+    return normalizeMatch(raw);
+  },
   createMatch: (data: {
     homeTeamId: string;
     awayTeamId: string;
@@ -141,18 +325,7 @@ export const api = {
     request<Player>("/players", { method: "POST", body: JSON.stringify(data) }),
 
   // Scoring
-  recordDelivery: (matchId: string, data: {
-    innings_num: number;
-    bowler_id: string;
-    striker_id: string;
-    non_striker_id: string;
-    runs_batsman: number;
-    runs_extras?: number;
-    extra_type?: string | null;
-    wicket_type?: string | null;
-    dismissed_player_id?: string | null;
-    fielder_id?: string | null;
-  }) =>
+  recordDelivery: (matchId: string, data: RecordDeliveryInput) =>
     request<Delivery>(`/matches/${matchId}/deliveries`, {
       method: "POST",
       body: JSON.stringify(data),
@@ -176,7 +349,7 @@ export const api = {
 
   // Scorecard & Commentary
   getScorecard: (matchId: string) =>
-    request<ScorecardResponse>(`/matches/${matchId}/scorecard`),
+    request<InningsScorecard[]>(`/matches/${matchId}/scorecard`),
   getCommentary: (matchId: string, page = 1) =>
     request<PaginatedResponse<Commentary>>(`/matches/${matchId}/commentary?page=${page}`),
 

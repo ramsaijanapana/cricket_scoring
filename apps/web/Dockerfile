@@ -26,21 +26,10 @@ FROM nginx:alpine
 # Copy built static assets
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 
-# SPA fallback: serve index.html for all non-file routes
-RUN printf 'server {\n\
-  listen 80;\n\
-  root /usr/share/nginx/html;\n\
-  index index.html;\n\
-\n\
-  location / {\n\
-    try_files $uri $uri/ /index.html;\n\
-  }\n\
-\n\
-  location ~* \\.(?:css|js|svg|png|jpg|jpeg|gif|ico|woff2?)$ {\n\
-    expires 1y;\n\
-    add_header Cache-Control "public, immutable";\n\
-  }\n\
-}\n' > /etc/nginx/conf.d/default.conf
+# API upstream hostname (docker-compose service name by default)
+ENV API_HOST=api
+ENV NGINX_ENVSUBST_FILTER=API_HOST
+
+COPY apps/web/nginx.conf.template /etc/nginx/templates/default.conf.template
 
 EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
