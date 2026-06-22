@@ -15,6 +15,19 @@ const MIME_TO_EXT: Record<string, string> = {
 };
 
 export const userRoutes: FastifyPluginAsync = async (app) => {
+  // Current authenticated user profile
+  app.get('/me', { preHandler: [requireAuth] }, async (req, reply) => {
+    let userId: string;
+    try { userId = getUserId(req); } catch { return reply.status(401).send({ error: 'Authentication required' }); }
+
+    const user = await db.query.appUser.findFirst({
+      where: eq(appUser.id, userId),
+    });
+    if (!user) return reply.status(404).send({ error: 'User not found' });
+
+    return sanitizeUser(user);
+  });
+
   // Avatar upload
   app.post('/me/avatar', { preHandler: [requireAuth] }, async (req, reply) => {
     let userId: string;

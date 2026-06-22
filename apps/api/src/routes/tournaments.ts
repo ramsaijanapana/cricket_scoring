@@ -4,38 +4,7 @@ import { tournament, match, matchTeam, innings, team } from '../db/schema/index'
 import { eq, and, inArray } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth';
 import { parsePagination, paginatedResponse } from '../middleware/pagination';
-import { z } from 'zod';
-
-// ─── Validation schemas ─────────────────────────────────────────────────────
-
-const createTournamentSchema = z.object({
-  name: z.string().min(1).max(300),
-  shortName: z.string().max(30).optional(),
-  season: z.string().max(20).optional(),
-  format: z.enum(['t20', 'odi', 'test', 'the_hundred', 't10', 'custom']),
-  startDate: z.string().optional(),
-  endDate: z.string().optional(),
-  organizer: z.string().max(200).optional(),
-  groupStageConfig: z.object({
-    groups: z.number().int().min(1).max(8).optional(),
-    teamsPerGroup: z.number().int().min(2).max(20).optional(),
-    pointsForWin: z.number().int().default(2),
-    pointsForTie: z.number().int().default(1),
-    pointsForNR: z.number().int().default(1),
-  }).optional(),
-  teamIds: z.array(z.string().uuid()).optional(),
-});
-
-const addFixtureSchema = z.object({
-  homeTeamId: z.string().uuid(),
-  awayTeamId: z.string().uuid(),
-  formatConfigId: z.string().min(1),
-  matchNumber: z.number().int().optional(),
-  venue: z.string().optional(),
-  city: z.string().optional(),
-  scheduledStart: z.string().optional(),
-  stage: z.enum(['group', 'quarter_final', 'semi_final', 'final', 'eliminator', 'qualifier']).optional(),
-});
+import { createTournamentSchema, addFixtureSchema } from '../middleware/validation';
 
 // ─── NRR Calculator ─────────────────────────────────────────────────────────
 

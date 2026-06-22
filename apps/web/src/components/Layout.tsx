@@ -1,6 +1,20 @@
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Outlet, Link, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
-import { Monitor, Sun, Moon, LayoutList, Plus, Trophy, Settings, Rss, Star, Medal } from 'lucide-react';
+import {
+  Monitor,
+  Sun,
+  Moon,
+  LayoutList,
+  Plus,
+  Trophy,
+  Settings,
+  Rss,
+  Star,
+  Medal,
+  Menu,
+  X,
+} from 'lucide-react';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
 import { useTheme } from '../hooks/useTheme';
 import { NotificationBell } from './NotificationBell';
@@ -17,10 +31,54 @@ const themeLabels: Record<string, string> = {
   dark: 'Dark',
 };
 
+const NAV_ITEMS = [
+  {
+    to: '/',
+    label: 'Matches',
+    icon: LayoutList,
+    isActive: (path: string) => path === '/',
+  },
+  {
+    to: '/tournaments',
+    label: 'Tournaments',
+    icon: Trophy,
+    isActive: (path: string) => path.startsWith('/tournaments'),
+  },
+  {
+    to: '/feed',
+    label: 'Feed',
+    icon: Rss,
+    isActive: (path: string) => path === '/feed',
+  },
+  {
+    to: '/fantasy',
+    label: 'Fantasy',
+    icon: Star,
+    isActive: (path: string) => path.startsWith('/fantasy'),
+  },
+  {
+    to: '/records',
+    label: 'Records',
+    icon: Medal,
+    isActive: (path: string) => path.startsWith('/records'),
+  },
+  {
+    to: '/matches/new',
+    label: 'New',
+    icon: Plus,
+    isActive: (path: string) => path === '/matches/new',
+    accent: true,
+  },
+] as const;
+
 export function Layout() {
   const location = useLocation();
   const isOnline = useOnlineStatus();
   const { theme, resolvedTheme, setTheme } = useTheme();
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const drawerRef = useRef<HTMLElement>(null);
+  const hamburgerRef = useRef<HTMLButtonElement>(null);
+  const closeDrawerRef = useRef<HTMLButtonElement>(null);
 
   const cycleTheme = () => {
     const order: Array<'system' | 'light' | 'dark'> = ['system', 'light', 'dark'];
@@ -28,9 +86,64 @@ export function Layout() {
     setTheme(order[(idx + 1) % order.length]);
   };
 
-  // Determine the icon for the current theme
+  const closeDrawer = useCallback(() => {
+    setDrawerOpen(false);
+  }, []);
+
+  const openDrawer = useCallback(() => {
+    setDrawerOpen(true);
+  }, []);
+
+  // Close drawer on route change
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [location.pathname]);
+
+  // Lock body scroll while drawer is open
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [drawerOpen]);
+
+  // Focus trap + Escape to close
+  useEffect(() => {
+    if (!drawerOpen) return;
+
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeDrawer();
+        hamburgerRef.current?.focus();
+        return;
+      }
+
+      if (e.key === 'Tab' && drawerRef.current) {
+        const focusable = drawerRef.current.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+        );
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKey);
+    requestAnimationFrame(() => closeDrawerRef.current?.focus());
+    return () => document.removeEventListener('keydown', handleKey);
+  }, [drawerOpen, closeDrawer]);
+
   const currentThemeKey = theme === 'system' ? 'system' : resolvedTheme === 'dark' ? 'dark' : 'light';
-  // Use theme (not resolvedTheme) for rotation so it changes on every cycle click
   const iconRotation = themeIcons[theme]?.rotate ?? 0;
   const ThemeIconComponent = themeIcons[currentThemeKey]?.icon ?? Monitor;
 
@@ -75,35 +188,43 @@ export function Layout() {
         transition={{ duration: 0.3, ease: [0.25, 0.1, 0.25, 1] }}
       >
         <div className="max-w-[1280px] mx-auto px-4 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5 min-h-0 min-w-0 group">
-            <div className="w-9 h-9 bg-gradient-to-br from-cricket-green to-emerald-600 rounded-xl flex items-center justify-center font-bold text-xs text-white shadow-sm group-hover:shadow-[0_0_20px_rgba(22,163,74,0.3),0_0_8px_rgba(22,163,74,0.2)] transition-all duration-300 group-hover:scale-105">
-              CS
-            </div>
-            <span className="font-bold text-base hidden mobile-l:inline tracking-tight">
-              Cric<span className="text-cricket-green">Score</span>
-            </span>
-          </Link>
+          <div className="flex items-center gap-2 min-w-0">
+            <motion.button
+              ref={hamburgerRef}
+              type="button"
+              onClick={openDrawer}
+              className="tablet:hidden flex items-center justify-center w-9 h-9 min-h-0 min-w-0 rounded-xl transition-colors duration-200 text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]"
+              whileTap={{ scale: 0.9 }}
+              aria-label="Open navigation menu"
+              aria-expanded={drawerOpen}
+              aria-controls="mobile-nav-drawer"
+            >
+              <Menu size={20} />
+            </motion.button>
+
+            <Link to="/" className="flex items-center gap-2.5 min-h-0 min-w-0 group">
+              <div className="w-9 h-9 bg-gradient-to-br from-cricket-green to-emerald-600 rounded-xl flex items-center justify-center font-bold text-xs text-white shadow-sm group-hover:shadow-[0_0_20px_rgba(22,163,74,0.3),0_0_8px_rgba(22,163,74,0.2)] transition-all duration-300 group-hover:scale-105">
+                CS
+              </div>
+              <span className="font-bold text-base hidden mobile-l:inline tracking-tight">
+                Cric<span className="text-cricket-green">Score</span>
+              </span>
+            </Link>
+          </div>
 
           <div className="flex items-center gap-1">
-            <nav className="flex items-center gap-0.5">
-              <NavLink to="/" active={location.pathname === '/'} icon={<LayoutList size={16} />}>
-                Matches
-              </NavLink>
-              <NavLink to="/tournaments" active={location.pathname.startsWith('/tournaments')} icon={<Trophy size={16} />}>
-                Tournaments
-              </NavLink>
-              <NavLink to="/feed" active={location.pathname === '/feed'} icon={<Rss size={16} />}>
-                Feed
-              </NavLink>
-              <NavLink to="/fantasy" active={location.pathname.startsWith('/fantasy')} icon={<Star size={16} />}>
-                Fantasy
-              </NavLink>
-              <NavLink to="/records" active={location.pathname.startsWith('/records')} icon={<Medal size={16} />}>
-                Records
-              </NavLink>
-              <NavLink to="/matches/new" active={location.pathname === '/matches/new'} accent icon={<Plus size={16} />}>
-                New
-              </NavLink>
+            <nav className="hidden tablet:flex items-center gap-0.5" aria-label="Main">
+              {NAV_ITEMS.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  active={item.isActive(location.pathname)}
+                  accent={'accent' in item && item.accent}
+                  icon={<item.icon size={16} />}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
             </nav>
 
             <NotificationBell />
@@ -138,6 +259,70 @@ export function Layout() {
         </div>
       </motion.header>
 
+      {/* Mobile navigation drawer */}
+      <AnimatePresence>
+        {drawerOpen && (
+          <>
+            <motion.button
+              type="button"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="tablet:hidden fixed inset-0 z-[60] bg-black/40 backdrop-blur-[2px]"
+              aria-label="Close navigation menu"
+              onClick={closeDrawer}
+            />
+
+            <motion.nav
+              ref={drawerRef}
+              id="mobile-nav-drawer"
+              initial={{ x: '-100%' }}
+              animate={{ x: 0 }}
+              exit={{ x: '-100%' }}
+              transition={{ duration: 0.25, ease: [0.25, 0.1, 0.25, 1] }}
+              className="tablet:hidden fixed top-0 left-0 bottom-0 z-[70] w-[min(280px,85vw)] bg-[var(--header-bg)] backdrop-blur-[20px] backdrop-saturate-[180%] border-r border-[var(--border-subtle)] shadow-xl flex flex-col"
+              aria-label="Main"
+            >
+              <div className="flex items-center justify-between px-4 h-14 border-b border-[var(--border-subtle)]">
+                <span className="font-bold text-base tracking-tight">
+                  Cric<span className="text-cricket-green">Score</span>
+                </span>
+                <motion.button
+                  ref={closeDrawerRef}
+                  type="button"
+                  onClick={() => {
+                    closeDrawer();
+                    hamburgerRef.current?.focus();
+                  }}
+                  className="flex items-center justify-center w-9 h-9 rounded-xl transition-colors duration-200 text-[var(--text-tertiary)] hover:bg-[var(--bg-hover)] hover:text-[var(--text-secondary)]"
+                  whileTap={{ scale: 0.9 }}
+                  aria-label="Close navigation menu"
+                >
+                  <X size={20} />
+                </motion.button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-3 py-4 flex flex-col gap-1">
+                {NAV_ITEMS.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    active={item.isActive(location.pathname)}
+                    accent={'accent' in item && item.accent}
+                    icon={<item.icon size={18} />}
+                    variant="drawer"
+                    onNavigate={closeDrawer}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            </motion.nav>
+          </>
+        )}
+      </AnimatePresence>
+
       {/* Main content */}
       <main id="main-content" className="flex-1 max-w-[1280px] mx-auto w-full px-4 py-6">
         <Outlet />
@@ -160,15 +345,21 @@ function NavLink({
   accent,
   icon,
   children,
+  variant = 'header',
+  onNavigate,
 }: {
   to: string;
   active: boolean;
   accent?: boolean;
   icon?: React.ReactNode;
   children: React.ReactNode;
+  variant?: 'header' | 'drawer';
+  onNavigate?: () => void;
 }) {
   const baseClasses =
-    'px-3.5 py-2 rounded-xl text-sm font-medium transition-colors duration-200 min-h-[44px] flex items-center gap-1.5';
+    variant === 'drawer'
+      ? 'w-full px-4 py-3 rounded-xl text-base font-medium transition-colors duration-200 min-h-[44px] flex items-center gap-3'
+      : 'px-3.5 py-2 rounded-xl text-sm font-medium transition-colors duration-200 min-h-[44px] flex items-center gap-1.5';
 
   const stateClasses = active
     ? accent
@@ -177,8 +368,13 @@ function NavLink({
     : 'text-[var(--nav-text)] hover:text-[var(--nav-hover-text)] hover:bg-[var(--nav-hover-bg)]';
 
   return (
-    <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
-      <Link to={to} className={`${baseClasses} ${stateClasses}`} aria-current={active ? 'page' : undefined}>
+    <motion.div whileHover={{ scale: variant === 'header' ? 1.02 : 1.01 }} whileTap={{ scale: 0.98 }}>
+      <Link
+        to={to}
+        className={`${baseClasses} ${stateClasses}`}
+        aria-current={active ? 'page' : undefined}
+        onClick={onNavigate}
+      >
         {icon}
         {children}
       </Link>

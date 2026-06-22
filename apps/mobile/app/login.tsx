@@ -12,6 +12,7 @@ import {
 import { useRouter } from "expo-router";
 import { api } from "../lib/api";
 import { storage } from "../lib/storage";
+import { registerPushTokenIfAuthed } from "../lib/notifications";
 import { colors } from "../lib/theme";
 
 export default function LoginScreen() {
@@ -36,6 +37,9 @@ export default function LoginScreen() {
       await storage.setRefreshToken(response.refreshToken);
       const user = await api.getMyProfile();
       await storage.setUser(user);
+      registerPushTokenIfAuthed().catch((err) => {
+        console.warn("[notifications] push registration failed:", err);
+      });
       router.back();
     } catch (err: any) {
       Alert.alert("Error", err.message || "Login failed");

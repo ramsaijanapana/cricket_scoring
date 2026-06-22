@@ -3,13 +3,19 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { View } from "react-native";
-import { initNotifications } from "../lib/notifications";
+import {
+  initNotifications,
+  registerPushTokenIfAuthed,
+} from "../lib/notifications";
 import { startAutoSync, stopAutoSync } from "../lib/offline-sync";
 
 export default function RootLayout() {
   useEffect(() => {
     initNotifications().catch((err) => {
       console.warn("[notifications] init failed:", err);
+    });
+    registerPushTokenIfAuthed().catch((err) => {
+      console.warn("[notifications] push registration failed:", err);
     });
     startAutoSync();
     return () => stopAutoSync();

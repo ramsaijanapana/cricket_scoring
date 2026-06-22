@@ -1,0 +1,135 @@
+version: "3.9"
+
+# ── Staging Docker Compose (GHCR images) ─────────────────────────────────────
+# Usage:
+#   export REGISTRY=ghcr.io
+#   export IMAGE_PREFIX=owner/cricket_scoring
+#   export IMAGE_TAG=<git-sha-or-latest>
+#   docker compose -f docker-compose.staging.yml pull
+#   docker compose -f docker-compose.staging.yml --profile migrate run --rm migrate
+#   docker compose -f docker-compose.staging.yml up -d
+#
+# Requires: .env with staging secrets (see .env.example)
+
+services:
+  migrate:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:?IMAGE_PREFIX is required}/api:${IMAGE_TAG:-latest}
+    container_name: cricscore_staging_migrate
+    profiles:
+      - migrate
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+    networks:
+      - internal
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["node", "dist/db/migrate.js"]
+    restart: "no"
+
+  api:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:?IMAGE_PREFIX is required}/api:${IMAGE_TAG:-latest}
+    container_name: cricscore_staging_api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost}
+      SENTRY_DSN: ${SENTRY_DSN:-}
+      APP_VERSION: ${APP_VERSION:-latest}
+      PORT: "3001"
+      HOST: "0.0.0.0"
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_CDN_URL: ${S3_CDN_URL:-}
+    ports:
+      - "${API_PORT:-3001}:3001"
+    networks:
+      - internal
+      - external
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3001/health', r => { let d=''; r.on('data',c=>d+=c); r.on('end',()=>{ const h=JSON.parse(d); process.exit(h.status==='ok'?0:1) }) }).on('error',()=>process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  web:
+    image: ${REGISTRY:-ghcr.io}/${IMAGE_PREFIX:?IMAGE_PREFIX is required}/web:${IMAGE_TAG:-latest}
+    container_name: cricscore_staging_web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-80}:80"
+    networks:
+      - external
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  postgres:
+    image: timescale/timescaledb:latest-pg16
+    container_name: cricscore_staging_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cricket} -d ${POSTGRES_DB:-cricket_scoring}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: cricscore_staging_redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    command: redis-server --appendonly yes --maxmemory 200mb --maxmemory-policy allkeys-lru
+
+networks:
+  internal:
+    driver: bridge
+    internal: true
+  external:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local

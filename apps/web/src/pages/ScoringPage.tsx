@@ -3,17 +3,20 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { Link } from 'react-router-dom';
-import { Undo2, X, ChevronLeft, AlertTriangle, Trophy, ArrowLeft, ArrowLeftRight, ChevronDown, TrendingUp, BarChart3 } from 'lucide-react';
-import type { PredictionEvent, Commentary } from '@cricket/shared';
+import { Undo2, X, ChevronLeft, AlertTriangle, Trophy, ArrowLeft, ArrowLeftRight, ChevronDown } from 'lucide-react';
 import { api, ApiError } from '../lib/api';
-import { joinMatch, leaveMatch, getSocket, WS_EVENTS } from '../lib/socket';
 import { offlineStore } from '../lib/offline-store';
 import { useScoringStore, type BallDisplay } from '../stores/scoring-store';
 import { useOnlineStatus } from '../hooks/useOnlineStatus';
+import { useMatchSocket } from '../hooks/useMatchSocket';
+import { useOfflineReplay } from '../hooks/useOfflineReplay';
 import { TossWizard } from '../components/TossWizard';
 import { SyncStatusBadge } from '../components/SyncStatusBadge';
 import { CommentaryEditor } from '../components/CommentaryEditor';
 import { MatchChat } from '../components/MatchChat';
+import { MatchBreakScreen } from '../components/MatchBreakScreen';
+import { SpectatorBadge } from '../components/SpectatorBadge';
+import { LivePredictionChart } from '../components/charts/LivePredictionChart';
 
 type ExtrasMode = 'normal' | 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty';
 
@@ -127,7 +130,6 @@ export function ScoringPage() {
     inningsScore, inningsWickets, inningsOvers, runRate,
     requiredRunRate,
     recentBalls, addRecentBall, syncStatus, setSyncStatus,
-    updateFromDelivery,
   } = useScoringStore();
 
   const [extrasMode, setExtrasMode] = useState<ExtrasMode>('normal');
@@ -138,7 +140,6 @@ export function ScoringPage() {
   const [toastVisible, setToastVisible] = useState(false);
   const [toastMessage, setToastMessage] = useState('');
   const [wicketShake, setWicketShake] = useState(false);
-  const [milestoneToast, setMilestoneToast] = useState<{ text: string; type: string } | null>(null);
 
   // Track current on-strike players (updated from API response after each delivery)
   const [currentStrikerId, setCurrentStrikerId] = useState<string | null>(null);
@@ -158,12 +159,19 @@ export function ScoringPage() {
     teamName: string; score: number; wickets: number; overs: string; resultSummary?: string;
   } | null>(null);
 
-  // Win prediction (2nd innings chase)
-  const [prediction, setPrediction] = useState<PredictionEvent | null>(null);
+  const {
+    milestoneToast,
+    prediction,
+    breakStatus,
+    dlsTarget,
+    setBreakStatus,
+    latestCommentary,
+    deliveryVersion,
+    setLatestCommentary,
+    setDeliveryVersion,
+  } = useMatchSocket(matchId);
 
-  // Commentary editor state — tracks latest commentary for the most recent delivery
-  const [latestCommentary, setLatestCommentary] = useState<Commentary | null>(null);
-  const [deliveryVersion, setDeliveryVersion] = useState(0);
+  useOfflineReplay(matchId);
 
   // Manual strike swap
   const swapStrike = useCallback(() => {
@@ -200,6 +208,13 @@ export function ScoringPage() {
     queryKey: ['match', matchId],
     queryFn: () => api.getMatch(matchId!),
     enabled: !!matchId,
+  });
+
+  const isRainDelayed = matchData?.status === 'rain_delay' || breakStatus === 'rain_delay';
+  const { data: dlsState } = useQuery({
+    queryKey: ['dls', matchId],
+    queryFn: () => api.getDLS(matchId!),
+    enabled: !!matchId && isRainDelayed,
   });
 
   const currentInnings = matchData?.innings?.find((i: any) => i.status === 'in_progress');
@@ -239,109 +254,6 @@ export function ScoringPage() {
       useScoringStore.getState().reset();
     };
   }, [matchId]);
-
-  // WebSocket subscription
-  useEffect(() => {
-    if (!matchId) return;
-    joinMatch(matchId);
-
-    const socket = getSocket();
-    const deliveryEvent = WS_EVENTS.delivery(matchId);
-    const wicketEvent = WS_EVENTS.wicket(matchId);
-
-    socket.on(deliveryEvent, (data: any) => {
-      updateFromDelivery(data);
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-      // Capture commentary for the CommentaryEditor
-      if (data?.commentary) {
-        setLatestCommentary(data.commentary);
-        setDeliveryVersion((v) => v + 1);
-      }
-    });
-
-    socket.on(wicketEvent, (data: any) => {
-      updateFromDelivery(data);
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-    });
-
-    const overEvent = WS_EVENTS.over(matchId);
-    socket.on(overEvent, () => {
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-    });
-
-    const milestoneEvent = WS_EVENTS.milestone(matchId);
-    socket.on(milestoneEvent, (data: { text: string; type: string }) => {
-      setMilestoneToast({ text: data.text, type: data.type });
-      setTimeout(() => setMilestoneToast(null), 5000);
-    });
-
-    const predictionEvent = WS_EVENTS.prediction(matchId);
-    socket.on(predictionEvent, (data: PredictionEvent) => {
-      setPrediction(data);
-    });
-
-    return () => {
-      leaveMatch(matchId);
-      socket.off(deliveryEvent);
-      socket.off(wicketEvent);
-      socket.off(overEvent);
-      socket.off(milestoneEvent);
-      socket.off(predictionEvent);
-    };
-  }, [matchId]);
-
-  // Offline reconnection: replay queued deliveries when coming back online
-  useEffect(() => {
-    if (!matchId) return;
-
-    const replayPendingDeliveries = async () => {
-      const pending = await offlineStore.getPendingDeliveries();
-      const matchPending = pending
-        .filter((d) => d.matchId === matchId)
-        .sort((a, b) => a.createdAt - b.createdAt);
-
-      if (matchPending.length === 0) return;
-
-      setSyncStatus('pending', matchPending.length);
-      let syncedCount = 0;
-
-      for (const entry of matchPending) {
-        try {
-          await api.recordDelivery(matchId, entry.payload);
-          await offlineStore.markSynced(entry.id);
-          syncedCount++;
-          setSyncStatus('pending', matchPending.length - syncedCount);
-        } catch (err) {
-          await offlineStore.markFailed(entry.id);
-        }
-      }
-
-      // Refresh match state after replaying all queued deliveries
-      queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-      const remaining = await offlineStore.getPendingDeliveries();
-      const matchRemaining = remaining.filter((d) => d.matchId === matchId);
-      if (matchRemaining.length === 0) {
-        setSyncStatus('synced');
-      } else {
-        setSyncStatus('pending', matchRemaining.length);
-      }
-    };
-
-    const handleOnline = () => {
-      replayPendingDeliveries();
-    };
-
-    window.addEventListener('online', handleOnline);
-
-    // Also replay on mount if already online and there might be pending items
-    if (navigator.onLine) {
-      replayPendingDeliveries();
-    }
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-    };
-  }, [matchId, queryClient, setSyncStatus]);
 
   // Record delivery
   const deliveryMutation = useMutation({
@@ -729,6 +641,23 @@ export function ScoringPage() {
   // All scoring controls disabled when innings or match is completed
   const scoringDisabled = inningsCompleted || matchCompleted;
 
+  const activeBreak: 'innings_break' | 'rain_delay' | null =
+    breakStatus
+    ?? (matchData?.status === 'innings_break' || matchData?.status === 'rain_delay'
+      ? matchData.status
+      : null)
+    ?? (inningsCompleted && !matchCompleted ? 'innings_break' : null);
+
+  const chasingInnings = matchData?.innings?.find((i: any) => i.targetScore != null);
+  const breakTargetScore =
+    chasingInnings?.targetScore
+    ?? (completedInnings ? (completedInnings as any).totalRuns + 1 : undefined);
+  const effectiveDlsTarget = dlsTarget ?? dlsState?.revisedTarget ?? undefined;
+  const showLocalInningsBreakAction = activeBreak === 'innings_break' && inningsCompleted && !matchCompleted;
+
+  const teamAName = matchData?.teams?.[0]?.teamName || 'Team A';
+  const teamBName = matchData?.teams?.[1]?.teamName || 'Team B';
+
   return (
     <motion.div
       className="max-w-lg mx-auto flex flex-col gap-3 pb-24"
@@ -742,7 +671,10 @@ export function ScoringPage() {
           <ArrowLeft size={16} />
           <span>Back to Matches</span>
         </Link>
-        <SyncStatusBadge />
+        <div className="flex items-center gap-2">
+          {matchId && <SpectatorBadge matchId={matchId} />}
+          <SyncStatusBadge />
+        </div>
       </motion.div>
 
       {/* ── Sync status ─────────────────────────────────────────────── */}
@@ -1187,7 +1119,7 @@ export function ScoringPage() {
         </motion.button>
       </motion.div>
 
-      {/* ── Win Prediction widget (2nd innings chase) ─────────────────── */}
+      {/* ── Win Prediction chart (2nd innings chase) ──────────────────── */}
       <AnimatePresence>
         {prediction && !matchCompleted && (
           <motion.div
@@ -1195,100 +1127,51 @@ export function ScoringPage() {
             animate={reduceMotion ? { opacity: 1 } : { opacity: 1, y: 0 }}
             exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 }}
             transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            className="card p-3"
+            className="card p-4"
           >
-            <div className="flex items-center gap-2 mb-2">
-              <BarChart3 size={12} className="text-cricket-blue" />
-              <span className="text-[10px] font-bold text-theme-tertiary uppercase tracking-widest">Win Prediction</span>
-            </div>
-            <div className="flex items-center gap-3">
-              {/* Probability bar */}
-              <div className="flex-1">
-                <div className="flex justify-between text-[10px] font-semibold mb-1">
-                  <span className="text-theme-secondary">{matchData?.teams?.[0]?.teamName || 'Team A'}</span>
-                  <span className="text-theme-secondary">{matchData?.teams?.[1]?.teamName || 'Team B'}</span>
-                </div>
-                <div className="h-2 rounded-full bg-[var(--bg-input)] overflow-hidden flex">
-                  <motion.div
-                    className="h-full bg-cricket-blue rounded-l-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${prediction.winProbA}%` }}
-                    transition={{ type: 'spring', stiffness: 200, damping: 25 }}
-                  />
-                  <motion.div
-                    className="h-full bg-cricket-green rounded-r-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${prediction.winProbB}%` }}
-                    transition={{ type: 'spring', stiffness: 200, damping: 25 }}
-                  />
-                </div>
-                <div className="flex justify-between text-[10px] font-bold mt-1 tabular-nums">
-                  <span className="text-cricket-blue">{prediction.winProbA}%</span>
-                  <span className="text-cricket-green">{prediction.winProbB}%</span>
-                </div>
-              </div>
-              {/* Projected score */}
-              <div className="text-center pl-3 border-l border-[var(--border-subtle)]">
-                <div className="flex items-center gap-1 mb-0.5">
-                  <TrendingUp size={10} className="text-theme-muted" />
-                  <span className="text-[9px] font-bold text-theme-muted uppercase">Projected</span>
-                </div>
-                <span className="text-sm font-extrabold text-theme-primary tabular-nums">
-                  {prediction.projectedScoreLow}-{prediction.projectedScoreHigh}
-                </span>
-              </div>
-            </div>
+            <LivePredictionChart
+              team1={{ name: teamAName, probability: prediction.winProbA, color: 'var(--color-blue, #3b82f6)' }}
+              team2={{ name: teamBName, probability: prediction.winProbB, color: 'var(--color-green, #22c55e)' }}
+              projectedScore={{
+                low: prediction.projectedScoreLow,
+                mid: Math.round((prediction.projectedScoreLow + prediction.projectedScoreHigh) / 2),
+                high: prediction.projectedScoreHigh,
+              }}
+              currentScore={currentInnings?.totalRuns ?? inningsScore}
+            />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Innings Completed Overlay ──────────────────────────────── */}
-      <AnimatePresence>
-        {inningsCompleted && !matchCompleted && completionInfo && (
-          <motion.div
-            className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <motion.div
-              className="glass w-full max-w-md p-6 text-center"
-              initial={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
-              animate={reduceMotion ? { opacity: 1 } : { opacity: 1, scale: 1 }}
-              exit={reduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
-              transition={{ type: 'spring', stiffness: 300, damping: 25 }}
-            >
-              <div className="w-14 h-14 rounded-full bg-cricket-gold/15 border-2 border-cricket-gold/30 flex items-center justify-center mx-auto mb-4">
-                <Trophy size={24} className="text-cricket-gold" />
-              </div>
-              <h2 className="text-2xl font-extrabold text-theme-primary mb-2">Innings Over</h2>
-              <p className="text-lg text-theme-secondary font-semibold">
-                {completionInfo.teamName} scored{' '}
-                <span className="text-cricket-gold tabular-nums">
-                  {completionInfo.score}/{completionInfo.wickets}
-                </span>
-              </p>
-              <p className="text-sm text-theme-tertiary mt-1 tabular-nums">
-                in {completionInfo.overs} overs
-              </p>
+      {/* ── Innings break / rain delay overlay ───────────────────────── */}
+      {activeBreak && !matchCompleted && (
+        <>
+          <MatchBreakScreen
+            type={activeBreak}
+            matchData={matchData}
+            targetScore={activeBreak === 'innings_break' ? breakTargetScore : undefined}
+            dlsTarget={activeBreak === 'rain_delay' ? effectiveDlsTarget : undefined}
+          />
+          {showLocalInningsBreakAction && (
+            <div className="fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 w-full max-w-md px-4">
               <motion.button
                 onClick={() => {
                   setInningsCompleted(false);
                   setCompletionInfo(null);
+                  setBreakStatus(null);
                   queryClient.invalidateQueries({ queryKey: ['match', matchId] });
                 }}
                 whileTap={reduceMotion ? undefined : { scale: 0.95 }}
-                className="mt-6 w-full py-3 rounded-2xl bg-cricket-green/15 text-cricket-green
-                  border-2 border-cricket-green/30 font-bold text-sm
-                  hover:bg-cricket-green/20 transition-colors"
+                className="w-full py-3 rounded-2xl bg-cricket-green/90 text-white
+                  border border-cricket-green font-bold text-sm shadow-lg
+                  hover:bg-cricket-green transition-colors"
               >
                 Start Next Innings
               </motion.button>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── Match Completed Overlay ────────────────────────────────── */}
       <AnimatePresence>

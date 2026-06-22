@@ -8,7 +8,8 @@ import {
   ActivityIndicator,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { api, type RecordDeliveryInput } from "../../../lib/api";
+import * as Network from "expo-network";
+import { api, ApiError, type RecordDeliveryInput } from "../../../lib/api";
 import { colors } from "../../../lib/theme";
 import { hapticBoundary, hapticWicket, hapticUndo, hapticTap } from "../../../lib/haptics";
 import {
@@ -16,12 +17,16 @@ import {
   joinMatchRoom,
   leaveMatchRoom,
   onMatchEvent,
-  disconnectSocket,
 } from "../../../lib/socket";
 import {
+  applyOptimisticDelivery,
   queueDelivery,
   getPendingCount,
   isOnline,
+  refreshUndoStackPos,
+  setUndoStackPos,
+  syncPendingDeliveries,
+  showSyncConflictAlert,
 } from "../../../lib/offline-sync";
 
 const RUN_BUTTONS = [0, 1, 2, 3, 4, 6] as const;
@@ -141,6 +146,7 @@ export default function LiveScoringScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [isConnected, setIsConnected] = useState(true);
   const unsubMatchEvent = useRef<(() => void) | null>(null);
+  const undoStackPosRef = useRef(0);
 
   const fetchMatch = useCallback(async () => {
     if (!id) return;
@@ -156,9 +162,22 @@ export default function LiveScoringScreen() {
 
   // Refresh pending count from the offline queue
   const refreshPendingCount = useCallback(async () => {
-    const count = await getPendingCount();
+    if (!id) return;
+    const count = await getPendingCount(id);
     setPendingCount(count);
-  }, []);
+  }, [id]);
+
+  const handleSyncConflict = useCallback(
+    async (message?: string) => {
+      showSyncConflictAlert(message);
+      if (id) {
+        undoStackPosRef.current = await refreshUndoStackPos(id);
+        await refreshPendingCount();
+        await fetchMatch();
+      }
+    },
+    [id, fetchMatch, refreshPendingCount],
+  );
 
   // ─── WebSocket setup ────────────────────────────────────────────────
   useEffect(() => {
@@ -192,23 +211,56 @@ export default function LiveScoringScreen() {
     };
   }, [id, fetchMatch]);
 
-  // ─── Offline queue status ───────────────────────────────────────────
+  // ─── Undo stack position + pending queue ────────────────────────────
   useEffect(() => {
-    refreshPendingCount();
-    const interval = setInterval(refreshPendingCount, 3000);
-    return () => clearInterval(interval);
-  }, [refreshPendingCount]);
+    if (!id) return;
 
-  // ─── Network status check ──────────────────────────────────────────
+    void refreshUndoStackPos(id).then((pos) => {
+      undoStackPosRef.current = pos;
+    });
+    void refreshPendingCount();
+  }, [id, refreshPendingCount]);
+
+  // ─── Network listener + offline replay ──────────────────────────────
   useEffect(() => {
-    const checkNetwork = async () => {
-      const online = await isOnline();
-      setIsConnected(online);
+    if (!id) return;
+
+    const replayForMatch = async () => {
+      const result = await syncPendingDeliveries({
+        matchId: id,
+        onConflict: (conflict) => {
+          void handleSyncConflict(conflict.message);
+        },
+      });
+
+      if (result.syncedCount > 0) {
+        undoStackPosRef.current = await refreshUndoStackPos(id);
+        await refreshPendingCount();
+        await fetchMatch();
+      }
     };
-    checkNetwork();
-    const interval = setInterval(checkNetwork, 5000);
-    return () => clearInterval(interval);
-  }, []);
+
+    const subscription = Network.addNetworkStateListener((state) => {
+      const online =
+        (state.isConnected ?? false) && (state.isInternetReachable ?? false);
+      setIsConnected(online);
+
+      if (online) {
+        void replayForMatch();
+      }
+    });
+
+    void isOnline().then((online) => {
+      setIsConnected(online);
+      if (online) {
+        void replayForMatch();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [id, fetchMatch, handleSyncConflict, refreshPendingCount]);
 
   // Initial match fetch
   useEffect(() => {
@@ -224,6 +276,8 @@ export default function LiveScoringScreen() {
       return;
     }
 
+    payload.expected_stack_pos = undoStackPosRef.current;
+
     // Haptic feedback based on scoring action
     if (isWicket) {
       hapticWicket();
@@ -234,35 +288,45 @@ export default function LiveScoringScreen() {
     }
 
     setSubmitting(true);
+    const previousMatch = match;
+    setMatch(applyOptimisticDelivery(match, payload));
 
     try {
       const online = await isOnline();
 
       if (online) {
-        await api.recordDelivery(id, payload);
+        try {
+          const result = await api.recordDelivery(id, payload);
+          const nextPos =
+            result.delivery?.undoStackPos ??
+            undoStackPosRef.current + 1;
+          undoStackPosRef.current = nextPos;
+          await setUndoStackPos(id, nextPos);
+          await fetchMatch();
+        } catch (err) {
+          if (err instanceof ApiError && err.status === 409) {
+            setMatch(previousMatch);
+            await handleSyncConflict(err.message);
+            return;
+          }
+
+          await queueDelivery(id, payload);
+          undoStackPosRef.current += 1;
+          await setUndoStackPos(id, undoStackPosRef.current);
+          await refreshPendingCount();
+        }
       } else {
-        // Queue for later sync
         await queueDelivery(id, payload);
+        undoStackPosRef.current += 1;
+        await setUndoStackPos(id, undoStackPosRef.current);
         await refreshPendingCount();
       }
 
       setSelectedExtra(null);
       setIsWicket(false);
-
-      // Only fetch if online; offline state will be reconciled on sync
-      if (online) {
-        await fetchMatch();
-      }
     } catch (err: any) {
-      // Network error during request - queue offline
-      try {
-        await queueDelivery(id, payload);
-        await refreshPendingCount();
-        setSelectedExtra(null);
-        setIsWicket(false);
-      } catch {
-        Alert.alert("Error", err.message || "Failed to record delivery");
-      }
+      setMatch(previousMatch);
+      Alert.alert("Error", err.message || "Failed to record delivery");
     } finally {
       setSubmitting(false);
     }

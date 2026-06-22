@@ -7,6 +7,7 @@ import { api } from '../lib/api';
 import { CommentaryFeed } from '../components/CommentaryFeed';
 import { MatchChat } from '../components/MatchChat';
 import { AuditLogPanel } from '../components/AuditLogPanel';
+import { SpectatorBadge } from '../components/SpectatorBadge';
 
 const inningsContainerVariants = {
   hidden: {},
@@ -257,6 +258,11 @@ export function ScorecardPage() {
             <p className="text-theme-tertiary text-xs mt-2">
               {matchData.venue}{matchData.city ? ` · ${matchData.city}` : ''}
             </p>
+            {matchId && (
+              <div className="mt-3 flex justify-center">
+                <SpectatorBadge matchId={matchId} />
+              </div>
+            )}
             {matchData.resultSummary && (
               <motion.p
                 initial={{ opacity: 0 }}

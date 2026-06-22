@@ -4,6 +4,7 @@ import { motion, AnimatePresence, useReducedMotion } from 'framer-motion';
 import { MessageSquare, ChevronDown } from 'lucide-react';
 import type { Commentary } from '@cricket/shared';
 import { api } from '../lib/api';
+import { ReactionBar } from './ReactionBar';
 import { getSocket, WS_EVENTS } from '../lib/socket';
 
 interface CommentaryFeedProps {
@@ -207,6 +208,11 @@ export function CommentaryFeed({ matchId }: CommentaryFeedProps) {
                   <span className="inline-block mt-1 text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full bg-cricket-gold/10 text-cricket-gold">
                     {entry.milestone.replace(/_/g, ' ')}
                   </span>
+                )}
+                {entry.deliveryId && (
+                  <div className="mt-2">
+                    <ReactionBar matchId={matchId} deliveryId={entry.deliveryId} />
+                  </div>
                 )}
               </div>
 

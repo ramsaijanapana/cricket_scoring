@@ -4,6 +4,7 @@ import * as Device from "expo-device";
 import Constants from "expo-constants";
 import { router } from "expo-router";
 import { api } from "./api";
+import { storage } from "./storage";
 
 // ─── Configuration ──────────────────────────────────────────────────────────
 
@@ -90,22 +91,22 @@ export async function registerForPushNotifications(): Promise<string | null> {
 }
 
 /**
- * Send the push token to the API server for server-initiated notifications.
+ * Register the device push token with the API when the user is authenticated.
+ * Skips silently for guests or when push permissions/token are unavailable.
  */
-export async function sendTokenToServer(token: string): Promise<void> {
+export async function registerPushTokenIfAuthed(): Promise<void> {
+  const authToken = await storage.getToken();
+  if (!authToken) {
+    return;
+  }
+
+  const pushToken = await registerForPushNotifications();
+  if (!pushToken) {
+    return;
+  }
+
   try {
-    // Use a generic endpoint - the server stores the device token
-    await fetch(
-      `${process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000/api/v1"}/devices/register`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          token,
-          platform: Platform.OS,
-        }),
-      },
-    );
+    await api.registerDeviceToken(pushToken, Platform.OS);
   } catch (error) {
     console.warn("[notifications] Failed to register token with server:", error);
   }
@@ -151,13 +152,10 @@ export function setupNotificationListeners(): () => void {
 }
 
 /**
- * Initialize the full notification system. Call at app startup.
+ * Initialize notification categories and listeners. Call at app startup.
+ * Device token registration requires auth — use registerPushTokenIfAuthed().
  */
 export async function initNotifications(): Promise<void> {
   await setupNotificationCategories();
-  const token = await registerForPushNotifications();
-  if (token) {
-    await sendTokenToServer(token);
-  }
   setupNotificationListeners();
 }

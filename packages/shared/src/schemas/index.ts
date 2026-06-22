@@ -54,9 +54,42 @@ export const deliveryInputSchema = z.object({
   client_id: z.string().uuid().optional(),
 });
 
+// ─── Tournament schemas ─────────────────────────────────────────────────────
+
+export const createTournamentSchema = z.object({
+  name: z.string().min(1).max(300),
+  shortName: z.string().max(30).optional(),
+  season: z.string().max(20).optional(),
+  format: z.enum(['t20', 'odi', 'test', 'the_hundred', 't10', 'custom']),
+  startDate: z.string().optional(),
+  endDate: z.string().optional(),
+  organizer: z.string().max(200).optional(),
+  groupStageConfig: z.object({
+    groups: z.number().int().min(1).max(8).optional(),
+    teamsPerGroup: z.number().int().min(2).max(20).optional(),
+    pointsForWin: z.number().int().default(2),
+    pointsForTie: z.number().int().default(1),
+    pointsForNR: z.number().int().default(1),
+  }).optional(),
+  teamIds: z.array(z.string().uuid()).optional(),
+});
+
+export const addFixtureSchema = z.object({
+  homeTeamId: z.string().uuid(),
+  awayTeamId: z.string().uuid(),
+  formatConfigId: z.string().min(1),
+  matchNumber: z.number().int().optional(),
+  venue: z.string().optional(),
+  city: z.string().optional(),
+  scheduledStart: z.string().optional(),
+  stage: z.enum(['group', 'quarter_final', 'semi_final', 'final', 'eliminator', 'qualifier']).optional(),
+});
+
 // ─── Inferred types ─────────────────────────────────────────────────────────
 
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type CreateMatchInput = z.infer<typeof createMatchSchema>;
 export type DeliverySchemaInput = z.infer<typeof deliveryInputSchema>;
+export type CreateTournamentInput = z.infer<typeof createTournamentSchema>;
+export type AddFixtureInput = z.infer<typeof addFixtureSchema>;

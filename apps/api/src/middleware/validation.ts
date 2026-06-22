@@ -6,6 +6,8 @@ export {
   loginSchema,
   createMatchSchema,
   deliveryInputSchema,
+  createTournamentSchema,
+  addFixtureSchema,
 } from '@cricket/shared';
 
 import { deliveryInputSchema } from '@cricket/shared';

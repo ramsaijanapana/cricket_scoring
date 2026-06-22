@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-06-22T14:13:08.018Z
+- Updated: 2026-06-22T14:31:35.636Z
 - Branch: main
-- Head: b3072f2
-- Focus: P1 sprint
+- Head: b0b29d3
+- Focus: P1 complete
 
 ## Latest Summary
 
-- Pre-push: 360 review P0/P1 complete, 168 tests, auth/schemas/sockets/infra fixes
+- P1 sprint: 12 agents — match start, GET /users/me, deploy staging, E2E CI, ScoringPage hooks, mobile nav, orphaned components, orchestrator, offline sync, push reg, shared schemas, FeedPage RQ
 
 ## Next Steps
 
-- P1 sprint: match start, deploy, E2E CI, ScoringPage split
+- Force push to main (remote wiped) or merge branch; production deploy stub
 
 ## Risks / Watchouts
 
@@ -27,70 +27,70 @@
 
 ## Verification
 
-- npm test 168/168
+- npm test 178/178
 
 ## Working Tree Snapshot
 
-- Changed files: 66
+- Changed files: 29
 - Staged files: 0
 - agent-context/state.json
 - .github/workflows/ci.yml
-- apps/api/Dockerfile
-- apps/api/package.json
-- apps/api/src/config.ts
-- apps/api/src/db/migrate.ts
-- apps/api/src/db/migrations/meta/_journal.json
-- apps/api/src/engine/scoring-engine.test.ts
-- apps/api/src/engine/scoring-engine.ts
-- apps/api/src/middleware/auth.ts
-- apps/api/src/middleware/request-logger.ts
+- .github/workflows/deploy.yml
 - apps/api/src/middleware/validation.ts
-- apps/api/src/routes/audit-log.ts
-- apps/api/src/routes/auth.ts
 - apps/api/src/routes/deliveries.ts
-- apps/api/src/server.ts
-- apps/api/src/services/presence.ts
-- apps/api/src/services/realtime.ts
-- apps/api/vitest.config.ts
-- apps/mobile/app/(tabs)/profile.tsx
-- +46 more changed files
+- apps/api/src/routes/tournaments.ts
+- apps/api/src/routes/users.ts
+- apps/mobile/app/_layout.tsx
+- apps/mobile/app/login.tsx
+- apps/mobile/app/matches/[id]/score.tsx
+- apps/mobile/app/matches/new.tsx
+- apps/mobile/lib/api.ts
+- apps/mobile/lib/notifications.ts
+- apps/mobile/lib/offline-sync.ts
+- apps/web/nginx.conf.template
+- apps/web/src/components/CommentaryFeed.tsx
+- apps/web/src/components/Layout.tsx
+- apps/web/src/pages/FeedPage.tsx
+- apps/web/src/pages/ScorecardPage.tsx
+- apps/web/src/pages/ScoringPage.tsx
+- +9 more changed files
 
 ## Recent Checkpoints
 
-### 2026-06-22T14:13:08.018Z — P1 sprint
+### 2026-06-22T14:31:35.636Z — P1 complete
 
 - Actor: test
-- Summary: Pre-push: 360 review P0/P1 complete, 168 tests, auth/schemas/sockets/infra fixes
+- Summary: P1 sprint: 12 agents — match start, GET /users/me, deploy staging, E2E CI, ScoringPage hooks, mobile nav, orphaned components, orchestrator, offline sync, push reg, shared schemas, FeedPage RQ
+- Next: Force push to main (remote wiped) or merge branch; production deploy stub
+- Verified: npm test 178/178
+
+### 2026-06-22T14:23:33.137Z — E2E CI
+
+- Actor: test
+- Summary: CI e2e job runs test:e2e:all (smoke+phase2+architecture); phase2 e2e script migrated from x-user-id to Bearer auth
+- Next: P1 sprint: match start, deploy, ScoringPage split
+- Verified: bash -n on e2e-test.sh, e2e-test-phase2.sh, e2e-test-architecture.sh
+
+### 2026-06-22T14:22:01.482Z — web component integration
+
+- Actor: test
+- Summary: Web P1: wired MatchBreakScreen, SpectatorBadge, ReactionBar, LivePredictionChart into ScoringPage/ScorecardPage/CommentaryFeed; extended useMatchSocket for status/DLS
+- Next: P1 sprint: deploy, E2E CI, remaining orphaned components audit
+- Verified: npm test 178/178 (api 149 + web 29)
+
+### 2026-06-22T14:21:51.222Z — P1 mobile offline scoring
+
+- Actor: test
+- Summary: Mobile offline scoring: optimistic local updates, client_id/expected_stack_pos sync, 409 conflict refetch+alert, expo-network listener replaces 5s poll
 - Next: P1 sprint: match start, deploy, E2E CI, ScoringPage split
-- Verified: npm test 168/168
+- Verified: apps/mobile lint: no new errors in offline-sync.ts; score.tsx/api.ts updated
 
-### 2026-06-22T04:10:30.343Z — A++ implementation roadmap
-
-- Actor: test
-- Summary: 360 review complete: 7 explore agents + 10 implement agents; P0/P1 fixes across api/web/mobile/shared/infra; 168+ tests passing
-- Next: P1: mobile match start flow, web ScoringPage split, deploy wiring, E2E phase2 in CI
-- Verified: npm test green across api+web
-
-### 2026-06-22T04:10:18.565Z — web test coverage
+### 2026-06-22T14:20:46.953Z — mobile match start
 
 - Actor: test
-- Summary: Added offline-store unit tests with fake-indexeddb: queueDelivery, getPendingDeliveries, markSynced, markFailed retry cap
-- Next: E2E test web scoring flow; expand remaining web test coverage
-- Verified: apps/web npm test: 22/22 passed (6 new offline-store tests)
-
-### 2026-06-22T04:08:37.463Z — web auth UI
-
-- Actor: test
-- Summary: Web auth UI P0: LoginPage with email/password login, /login route, 401 interceptor redirects to login, social-socket requires auth in prod, setSentryUser on login
-- Next: E2E test web login flow; add GET /users/me API endpoint
-- Verified: apps/web vitest: api.test.ts 9/9, scoring-store 7/7 passed
-
-### 2026-06-22T04:07:07.009Z — @cricket/ui adoption
-
-- Actor: test
-- Summary: Adopted @cricket/ui in web and mobile: added dependency, tailwind presets use cricketPreset, thinned mobile theme.ts re-exports
-- Next: E2E test mobile scoring flow against live API
-- Verified: web/mobile typecheck run; tailwind CSS build passes; fixed green-light kebab alias in ui preset
+- Summary: Mobile match start lifecycle: fixed startMatch/recordToss API contracts, 3-step new match wizard (setup/toss/XI), getPlayers/getTeams paginated unwrap
+- Next: P1: deploy wiring, E2E CI, ScoringPage split
+- Verified: npm test 178/178; mobile tsc run (pre-existing nativewind className errors)
 
 ## Workflow Rule
 

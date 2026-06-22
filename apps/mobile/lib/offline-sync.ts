@@ -1,6 +1,7 @@
 import * as SQLite from "expo-sqlite";
 import * as Network from "expo-network";
-import { api } from "./api";
+import { Alert } from "react-native";
+import { api, ApiError, type RecordDeliveryInput } from "./api";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
 
@@ -10,6 +11,25 @@ interface PendingDelivery {
   payload: string;
   createdAt: string;
   synced: number; // 0 or 1
+}
+
+export interface SyncConflictInfo {
+  message: string;
+  serverUndoStackPos?: number;
+  matchId?: string;
+}
+
+export interface SyncResult {
+  syncedCount: number;
+  conflict?: SyncConflictInfo;
+}
+
+export type SyncConflictHandler = (info: SyncConflictInfo) => void;
+
+interface ThisOverBall {
+  runs: number;
+  isWicket: boolean;
+  extraType: RecordDeliveryInput["extra_type"];
 }
 
 // ─── Database ───────────────────────────────────────────────────────────────
@@ -27,8 +47,150 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       synced INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS match_sync_state (
+      matchId TEXT PRIMARY KEY,
+      undoStackPos INTEGER NOT NULL DEFAULT 0
+    );
   `);
   return db;
+}
+
+function extractServerUndoStackPos(error: ApiError): number | undefined {
+  const details = error.details as
+    | { server_state?: { current_undo_stack_pos?: number } }
+    | undefined;
+  return details?.server_state?.current_undo_stack_pos;
+}
+
+function networkStateOnline(state: Network.NetworkState): boolean {
+  return (state.isConnected ?? false) && (state.isInternetReachable ?? false);
+}
+
+// ─── Undo stack position ────────────────────────────────────────────────────
+
+export async function getUndoStackPos(matchId: string): Promise<number> {
+  const database = await getDb();
+  const row = await database.getFirstAsync<{ undoStackPos: number }>(
+    "SELECT undoStackPos FROM match_sync_state WHERE matchId = ?",
+    [matchId],
+  );
+  return row?.undoStackPos ?? 0;
+}
+
+export async function setUndoStackPos(matchId: string, pos: number): Promise<void> {
+  const database = await getDb();
+  await database.runAsync(
+    "INSERT INTO match_sync_state (matchId, undoStackPos) VALUES (?, ?) ON CONFLICT(matchId) DO UPDATE SET undoStackPos = excluded.undoStackPos",
+    [matchId, pos],
+  );
+}
+
+export async function refreshUndoStackPos(matchId: string): Promise<number> {
+  try {
+    const online = await isOnline();
+    if (!online) {
+      return getUndoStackPos(matchId);
+    }
+
+    const deliveries = await api.getDeliveries(matchId);
+    const pos = deliveries[0]?.undoStackPos ?? 0;
+    await setUndoStackPos(matchId, pos);
+    return pos;
+  } catch {
+    return getUndoStackPos(matchId);
+  }
+}
+
+// ─── Optimistic scoring ─────────────────────────────────────────────────────
+
+function incrementOvers(currentOvers: string | number, extraType: RecordDeliveryInput["extra_type"]): string {
+  if (extraType === "wide" || extraType === "noball") {
+    return String(currentOvers ?? "0.0");
+  }
+
+  let overs = parseFloat(String(currentOvers ?? "0"));
+  const completedOvers = Math.floor(overs);
+  const ballsInOver = Math.round((overs - completedOvers) * 10);
+  const nextBalls = ballsInOver + 1;
+
+  if (nextBalls >= 6) {
+    overs = completedOvers + 1;
+  } else {
+    overs = completedOvers + nextBalls / 10;
+  }
+
+  return overs.toFixed(1);
+}
+
+function buildThisOverBall(payload: RecordDeliveryInput): ThisOverBall {
+  return {
+    runs: (payload.runs_batsman ?? 0) + (payload.runs_extras ?? 0),
+    isWicket: payload.is_wicket ?? false,
+    extraType: payload.extra_type ?? null,
+  };
+}
+
+/**
+ * Apply a lightweight optimistic update to local match state while offline.
+ */
+export function applyOptimisticDelivery(match: any, payload: RecordDeliveryInput): any {
+  const inningsList = [...(match?.innings ?? [])];
+  const innIdx = inningsList.findIndex(
+    (inn: any) =>
+      inn.inningsNumber === payload.innings_num && inn.status === "in_progress",
+  );
+  if (innIdx === -1) return match;
+
+  const inn = { ...inningsList[innIdx] };
+  const totalRuns =
+    (inn.totalRuns ?? 0) + (payload.runs_batsman ?? 0) + (payload.runs_extras ?? 0);
+  const totalWickets = (inn.totalWickets ?? 0) + (payload.is_wicket ? 1 : 0);
+  const totalOvers = incrementOvers(inn.totalOvers ?? "0.0", payload.extra_type ?? null);
+
+  const battingScorecard = (inn.battingScorecard ?? []).map((entry: any) => {
+    if (entry.playerId !== payload.striker_id) return entry;
+
+    const ballsIncrement = payload.extra_type === "wide" ? 0 : 1;
+    return {
+      ...entry,
+      runsScored: (entry.runsScored ?? 0) + (payload.runs_batsman ?? 0),
+      ballsFaced: (entry.ballsFaced ?? 0) + ballsIncrement,
+      isOut: payload.is_wicket ? true : entry.isOut,
+    };
+  });
+
+  const bowlingScorecard = (inn.bowlingScorecard ?? []).map((entry: any) => {
+    if (entry.playerId !== payload.bowler_id) return entry;
+
+    const runsConceded =
+      (entry.runsConceded ?? 0) +
+      (payload.runs_batsman ?? 0) +
+      (payload.runs_extras ?? 0);
+
+    return {
+      ...entry,
+      runsConceded,
+      wicketsTaken:
+        (entry.wicketsTaken ?? 0) + (payload.is_wicket ? 1 : 0),
+    };
+  });
+
+  inningsList[innIdx] = {
+    ...inn,
+    totalRuns,
+    totalWickets,
+    totalOvers,
+    battingScorecard,
+    bowlingScorecard,
+  };
+
+  const thisOver = [...(match?.thisOver ?? []), buildThisOverBall(payload)].slice(-6);
+
+  return {
+    ...match,
+    innings: inningsList,
+    thisOver,
+  };
 }
 
 // ─── Public API ─────────────────────────────────────────────────────────────
@@ -38,7 +200,7 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
  */
 export async function queueDelivery(
   matchId: string,
-  payload: Record<string, unknown>,
+  payload: RecordDeliveryInput,
 ): Promise<void> {
   const database = await getDb();
   await database.runAsync(
@@ -48,49 +210,83 @@ export async function queueDelivery(
 }
 
 /**
- * Replay all unsynced deliveries to the API in order, marking each as synced
- * upon success. Returns the number of deliveries successfully synced.
+ * Replay unsynced deliveries to the API in order. Payloads must include
+ * client_id and expected_stack_pos for idempotency and conflict detection.
  */
-export async function syncPendingDeliveries(): Promise<number> {
+export async function syncPendingDeliveries(
+  options: {
+    matchId?: string;
+    onConflict?: SyncConflictHandler;
+  } = {},
+): Promise<SyncResult> {
   const database = await getDb();
-  const pending = await database.getAllAsync<PendingDelivery>(
-    "SELECT * FROM pending_deliveries WHERE synced = 0 ORDER BY id ASC",
-  );
+  const pending = options.matchId
+    ? await database.getAllAsync<PendingDelivery>(
+        "SELECT * FROM pending_deliveries WHERE synced = 0 AND matchId = ? ORDER BY id ASC",
+        [options.matchId],
+      )
+    : await database.getAllAsync<PendingDelivery>(
+        "SELECT * FROM pending_deliveries WHERE synced = 0 ORDER BY id ASC",
+      );
 
   let syncedCount = 0;
 
   for (const row of pending) {
     try {
-      const payload = JSON.parse(row.payload);
-      await api.recordDelivery(row.matchId, payload);
+      const payload = JSON.parse(row.payload) as RecordDeliveryInput;
+      const result = await api.recordDelivery(row.matchId, payload);
+
       await database.runAsync(
         "UPDATE pending_deliveries SET synced = 1 WHERE id = ?",
         [row.id],
       );
+
+      const nextPos =
+        result.delivery?.undoStackPos ??
+        ((payload.expected_stack_pos ?? 0) + 1);
+      await setUndoStackPos(row.matchId, nextPos);
       syncedCount++;
     } catch (error) {
-      // Stop on first failure to preserve delivery order
+      if (error instanceof ApiError && error.status === 409) {
+        const conflict: SyncConflictInfo = {
+          message: error.message,
+          serverUndoStackPos: extractServerUndoStackPos(error),
+          matchId: row.matchId,
+        };
+
+        if (conflict.serverUndoStackPos !== undefined) {
+          await setUndoStackPos(row.matchId, conflict.serverUndoStackPos);
+        }
+
+        options.onConflict?.(conflict);
+        return { syncedCount, conflict };
+      }
+
       console.warn("[offline-sync] Failed to sync delivery:", row.id, error);
       break;
     }
   }
 
-  // Purge synced rows older than 24 hours
   await database.runAsync(
     "DELETE FROM pending_deliveries WHERE synced = 1 AND createdAt < datetime('now', '-1 day')",
   );
 
-  return syncedCount;
+  return { syncedCount };
 }
 
 /**
  * Returns the count of deliveries that have not yet been synced.
  */
-export async function getPendingCount(): Promise<number> {
+export async function getPendingCount(matchId?: string): Promise<number> {
   const database = await getDb();
-  const result = await database.getFirstAsync<{ count: number }>(
-    "SELECT COUNT(*) as count FROM pending_deliveries WHERE synced = 0",
-  );
+  const result = matchId
+    ? await database.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) as count FROM pending_deliveries WHERE synced = 0 AND matchId = ?",
+        [matchId],
+      )
+    : await database.getFirstAsync<{ count: number }>(
+        "SELECT COUNT(*) as count FROM pending_deliveries WHERE synced = 0",
+      );
   return result?.count ?? 0;
 }
 
@@ -100,43 +296,70 @@ export async function getPendingCount(): Promise<number> {
 export async function isOnline(): Promise<boolean> {
   try {
     const state = await Network.getNetworkStateAsync();
-    return (state.isConnected ?? false) && (state.isInternetReachable ?? false);
+    return networkStateOnline(state);
   } catch {
     return false;
   }
 }
 
+export function showSyncConflictAlert(message?: string): void {
+  Alert.alert(
+    "Sync conflict",
+    message ??
+      "The score was updated elsewhere. Your local queue has been refreshed with the latest server state.",
+  );
+}
+
 // ─── Auto-sync on reconnection ──────────────────────────────────────────────
 
 let unsubscribe: (() => void) | null = null;
+let globalConflictHandler: SyncConflictHandler | undefined;
+
+export function setSyncConflictHandler(handler?: SyncConflictHandler): void {
+  globalConflictHandler = handler;
+}
 
 /**
  * Start listening for network changes and auto-sync when connectivity returns.
  * Call once at app startup.
  */
-export function startAutoSync(): void {
+export function startAutoSync(onConflict?: SyncConflictHandler): void {
   if (unsubscribe) return;
 
-  // Poll network state every 5 seconds when there are pending deliveries
-  let intervalId: ReturnType<typeof setInterval> | null = null;
+  if (onConflict) {
+    globalConflictHandler = onConflict;
+  }
 
-  const check = async () => {
-    const online = await isOnline();
-    if (online) {
-      const pending = await getPendingCount();
-      if (pending > 0) {
-        await syncPendingDeliveries();
-      }
+  const handleOnline = async () => {
+    const pending = await getPendingCount();
+    if (pending === 0) return;
+
+    const result = await syncPendingDeliveries({
+      onConflict: (conflict) => {
+        showSyncConflictAlert(conflict.message);
+        globalConflictHandler?.(conflict);
+      },
+    });
+
+    if (result.conflict) {
+      return;
     }
   };
 
-  intervalId = setInterval(check, 5000);
+  const subscription = Network.addNetworkStateListener((state) => {
+    if (networkStateOnline(state)) {
+      void handleOnline();
+    }
+  });
+
+  void isOnline().then((online) => {
+    if (online) {
+      void handleOnline();
+    }
+  });
 
   unsubscribe = () => {
-    if (intervalId) {
-      clearInterval(intervalId);
-      intervalId = null;
-    }
+    subscription.remove();
   };
 }
 

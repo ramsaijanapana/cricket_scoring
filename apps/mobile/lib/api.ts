@@ -206,15 +206,43 @@ function unwrapPaginated<T>(payload: T[] | PaginatedResponse<T>): T[] {
   return payload.data ?? [];
 }
 
-function parseApiError(body: Record<string, unknown>, status: number): string {
-  const errPayload = body.error;
-  if (typeof errPayload === "string") return errPayload;
-  if (errPayload && typeof errPayload === "object" && "message" in errPayload) {
-    const message = (errPayload as { message?: string }).message;
-    if (message) return message;
+export class ApiError extends Error {
+  status: number;
+  code?: string;
+  details?: unknown;
+
+  constructor(message: string, status: number, code?: string, details?: unknown) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+    this.details = details;
   }
-  if (typeof body.message === "string") return body.message;
-  return `API error: ${status}`;
+}
+
+function parseApiError(body: Record<string, unknown>, status: number): {
+  message: string;
+  code?: string;
+  details?: unknown;
+} {
+  const errPayload = body.error;
+  if (typeof errPayload === "string") {
+    return { message: errPayload };
+  }
+  if (errPayload && typeof errPayload === "object") {
+    const payload = errPayload as { message?: string; code?: string; details?: unknown };
+    if (payload.message) {
+      return {
+        message: payload.message,
+        code: payload.code,
+        details: payload.details,
+      };
+    }
+  }
+  if (typeof body.message === "string") {
+    return { message: body.message };
+  }
+  return { message: `API error: ${status}` };
 }
 
 // ─── Request helper ─────────────────────────────────────────────────────────
@@ -237,7 +265,8 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error(parseApiError(body, res.status));
+    const { message, code, details } = parseApiError(body, res.status);
+    throw new ApiError(message, res.status, code, details);
   }
 
   if (res.status === 204) return {} as T;
@@ -302,8 +331,23 @@ export const api = {
     tossDecision?: string;
   }) =>
     request<Match>("/matches", { method: "POST", body: JSON.stringify(data) }),
-  startMatch: (id: string, data: { tossWinnerTeamId: string; tossDecision: string }) =>
-    request<Match>(`/matches/${id}/start`, {
+  recordToss: (
+    matchId: string,
+    data: { winner_id: string; decision: "bat" | "field" },
+  ) =>
+    request<Match>(`/matches/${matchId}/toss`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  startMatch: (
+    id: string,
+    data: {
+      battingTeamId: string;
+      bowlingTeamId: string;
+      battingOrder: string[];
+    },
+  ) =>
+    request<Innings>(`/matches/${id}/start`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
@@ -314,22 +358,33 @@ export const api = {
     }),
 
   // Teams
-  getTeams: () => request<Team[]>("/teams"),
+  getTeams: async () => {
+    const raw = await request<Team[] | PaginatedResponse<Team>>("/teams");
+    return unwrapPaginated(raw);
+  },
   createTeam: (data: { name: string; shortName?: string; country?: string; teamType?: string }) =>
     request<Team>("/teams", { method: "POST", body: JSON.stringify(data) }),
 
   // Players
-  getPlayers: () => request<Player[]>("/players"),
+  getPlayers: async () => {
+    const raw = await request<Player[] | PaginatedResponse<Player>>("/players");
+    return unwrapPaginated(raw);
+  },
   getPlayer: (id: string) => request<Player>(`/players/${id}`),
   createPlayer: (data: { firstName: string; lastName: string; battingStyle?: string; bowlingStyle?: string; primaryRole?: string }) =>
     request<Player>("/players", { method: "POST", body: JSON.stringify(data) }),
 
   // Scoring
   recordDelivery: (matchId: string, data: RecordDeliveryInput) =>
-    request<Delivery>(`/matches/${matchId}/deliveries`, {
+    request<{
+      delivery?: { undoStackPos?: number };
+      idempotent?: boolean;
+    }>(`/matches/${matchId}/deliveries`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  getDeliveries: (matchId: string) =>
+    request<Array<{ undoStackPos: number }>>(`/matches/${matchId}/deliveries`),
   undoDelivery: (matchId: string, inningsId: string) =>
     request<void>(`/matches/${matchId}/deliveries/last`, {
       method: "DELETE",
@@ -411,4 +466,11 @@ export const api = {
   getMyProfile: () => request<AppUser>("/users/me"),
   updateMyProfile: (data: Partial<Pick<AppUser, "displayName" | "email">>) =>
     request<AppUser>("/users/me", { method: "PATCH", body: JSON.stringify(data) }),
+
+  // Push notifications
+  registerDeviceToken: (token: string, platform: string) =>
+    request<{ success: boolean }>("/notifications/register-device", {
+      method: "POST",
+      body: JSON.stringify({ token, platform }),
+    }),
 };
