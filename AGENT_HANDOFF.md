@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-06-22T15:28:24.481Z
-- Branch: main
-- Head: 90b56dd
+- Updated: 2026-08-23T17:05:51.791Z
+- Branch: wip/publish-readiness-classification
+- Head: dadd810
 - Focus: P3 live commentary
 
 ## Latest Summary
 
-- P3 A++ sprint: shared UI kit, scoring refactor, match cache, API route tests, mobile offline/haptics tests, CI smoke/a11y, docs/metrics
+- Audited CricScore mobile store readiness on 2026-08-23. Confirmed com.cricscore.app is not registered with Apple, no App Store Connect record exists, EAS and submit identifiers are blank, configured production/staging API hosts are unreachable, and Android release credentials are unavailable. Added docs/PUBLISH_READINESS_STATUS_2026-08-23.md; no app, backend, deployment, or store state was changed.
 
 ## Next Steps
 
-- Monitor CI on main after push
+- Deploy and validate production infrastructure, register store identities, establish signing and service credentials, complete listing/privacy assets, then verify an immutable native release candidate before any store upload.
 
 ## Risks / Watchouts
 
@@ -31,31 +31,17 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 136
-- Staged files: 0
-- agent-context/state.json
-- .env.example
-- .github/workflows/ci.yml
-- .github/workflows/deploy.yml
-- README.md
-- apps/api/.env.example
-- apps/api/src/config.ts
-- apps/api/src/db/index.ts
-- apps/api/src/middleware/metrics.ts
-- apps/api/src/middleware/pagination.ts
-- apps/api/src/routes/analytics.ts
-- apps/api/src/routes/commentary.ts
-- apps/api/src/server.ts
-- apps/api/src/services/notification-service.ts
-- apps/api/src/services/scoring-orchestrator.ts
-- apps/api/src/services/sentry.ts
-- apps/api/src/workers/notification-worker.ts
-- apps/mobile/app.json
-- apps/mobile/app/(tabs)/_layout.tsx
-- apps/mobile/app/(tabs)/chat.tsx
-- +116 more changed files
+- Changed files: 1
+- Staged files: 1
+- docs/PUBLISH_READINESS_STATUS_2026-08-23.md
 
 ## Recent Checkpoints
+
+### 2026-08-23T17:05:51.791Z — P3 live commentary
+
+- Actor: dev
+- Summary: Audited CricScore mobile store readiness on 2026-08-23. Confirmed com.cricscore.app is not registered with Apple, no App Store Connect record exists, EAS and submit identifiers are blank, configured production/staging API hosts are unreachable, and Android release credentials are unavailable. Added docs/PUBLISH_READINESS_STATUS_2026-08-23.md; no app, backend, deployment, or store state was changed.
+- Next: Deploy and validate production infrastructure, register store identities, establish signing and service credentials, complete listing/privacy assets, then verify an immutable native release candidate before any store upload.
 
 ### 2026-06-22T15:28:24.481Z — P3 live commentary
 
@@ -84,13 +70,6 @@
 - Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
 - Next: Continue P3 sprint agents; commit when ready
 - Verified: apps/mobile tsc clean; npm test 56/56
-
-### 2026-06-22T15:15:59.189Z — P3 contract unification
-
-- Actor: test
-- Summary: P3 contract unification: shared dtos.ts (MatchDetail, Paginated, RecordDeliveryInput, ScorecardSnapshot, RecordDeliveryResult); normalized WS events to snake_case + WS_EVENTS; web/mobile/api migrated off local scoring DTOs
-- Next: Other P3 agents; fix mobile haptics.test.ts parse error (unrelated)
-- Verified: shared build OK; api 171/171; web 82/82; mobile contract tests 40/40; root npm test blocked by haptics.test.ts syntax
 
 ## Workflow Rule
 
