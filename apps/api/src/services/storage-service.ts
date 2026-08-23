@@ -56,5 +56,9 @@ export async function deleteFile(key: string): Promise<void> {
 
   const __dirname = path.dirname(fileURLToPath(import.meta.url));
   const filepath = path.resolve(__dirname, '../../uploads', key);
-  try { fs.unlinkSync(filepath); } catch {}
+  try {
+    fs.unlinkSync(filepath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
 }

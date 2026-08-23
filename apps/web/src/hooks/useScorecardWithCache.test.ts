@@ -17,7 +17,7 @@ describe('fetchScorecardWithCache', () => {
   });
 
   it('caches fresh scorecard data from the API', async () => {
-    const scorecard = [{ innings: { totalRuns: 100 } }];
+    const scorecard = [{ innings: { totalRuns: 100 } }] as Awaited<ReturnType<typeof api.getScorecard>>;
     vi.mocked(api.getScorecard).mockResolvedValue(scorecard);
 
     const result = await fetchScorecardWithCache('match-1');
@@ -28,7 +28,7 @@ describe('fetchScorecardWithCache', () => {
   });
 
   it('falls back to cached scorecard when the API fails', async () => {
-    const scorecard = [{ innings: { totalRuns: 88 } }];
+    const scorecard = [{ innings: { totalRuns: 88 } }] as Awaited<ReturnType<typeof api.getScorecard>>;
     await offlineStore.cacheScorecard('match-1', scorecard);
     vi.mocked(api.getScorecard).mockRejectedValue(new Error('offline'));
 

@@ -333,7 +333,7 @@ export function useScoringPage() {
   const overs = currentInnings?.totalOvers || inningsOvers;
   const computedRunRate = computeRunRate(
     currentInnings?.totalRuns ?? inningsScore ?? 0,
-    currentInnings?.totalOvers || inningsOvers || '0.0',
+    String(currentInnings?.totalOvers || inningsOvers || '0.0'),
   );
   const strikerStats = getBatStats(striker);
   const nonStrikerStats = getBatStats(nonStriker);

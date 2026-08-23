@@ -115,11 +115,12 @@ export function CommentaryFeed({ matchId }: CommentaryFeedProps) {
     const deliveryEvent = WS_EVENTS.delivery(matchId);
 
     const handler = (eventData: { commentary?: Commentary }) => {
-      if (!eventData?.commentary) return;
-      if (activeLang !== 'en' && eventData.commentary.language !== activeLang) return;
+      const commentary = eventData?.commentary;
+      if (!commentary) return;
+      if (activeLang !== 'en' && commentary.language !== activeLang) return;
 
-      const added = patchCommentaryCache(queryClient, matchId, eventData.commentary, activeLang);
-      setAllEntries((prev) => mergeCommentaryEntries([eventData.commentary], prev));
+      const added = patchCommentaryCache(queryClient, matchId, commentary, activeLang);
+      setAllEntries((prev) => mergeCommentaryEntries([commentary], prev));
 
       if (added) {
         if (isPinnedToTop && feedRef.current) {

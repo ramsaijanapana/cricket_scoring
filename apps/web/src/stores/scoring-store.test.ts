@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import type { DeliveryEvent } from '@cricket/shared';
 import { useScoringStore } from './scoring-store';
 
 const resetState = {
@@ -42,7 +43,7 @@ describe('useScoringStore', () => {
         innings_overs: '5.3',
         run_rate: 7.5,
       },
-    });
+    } as unknown as DeliveryEvent);
 
     const state = useScoringStore.getState();
     expect(state.inningsScore).toBe(42);
@@ -97,7 +98,7 @@ describe('useScoringStore', () => {
         innings_overs: '5.3',
         run_rate: 7.5,
       },
-    });
+    } as unknown as DeliveryEvent);
     useScoringStore.getState().addRecentBall({ label: '4', type: 'four' });
     useScoringStore.getState().setSyncStatus('pending', 3);
     useScoringStore.getState().setParticipants('p1', 'p2', 'p3');

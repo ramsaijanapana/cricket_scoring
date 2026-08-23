@@ -101,7 +101,11 @@ export const broadcasterRoutes: FastifyPluginAsync = async (app) => {
 
       const handler = (data: any) => {
         // Map Socket.IO event types to broadcaster event types
-        let sseEventType = eventType;
+        let sseEventType:
+          | (typeof eventTypes)[number]
+          | 'over_complete'
+          | 'innings_complete'
+          | 'match_complete' = eventType;
         if (eventType === 'over') sseEventType = 'over_complete';
         if (eventType === 'status') {
           // Determine if it's innings_complete or match_complete

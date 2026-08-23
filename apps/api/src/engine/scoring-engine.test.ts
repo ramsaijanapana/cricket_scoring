@@ -364,7 +364,7 @@ describe('ScoringEngine — Full Over Simulation (User Story)', () => {
     let striker = 'player-A';
     let nonStriker = 'player-B';
     let totalRuns = 0;
-    let overCompleted = false;
+    let overCompleted: boolean;
 
     // Ball 1: dot ball (0 runs)
     legalBalls++;
@@ -439,7 +439,8 @@ describe('ScoringEngine — Full Over Simulation (User Story)', () => {
 
   it('User Story: Wide does not count as a ball faced by batsman', () => {
     // On a wide, the batsman is credited 0 balls faced
-    const ballsFacedIncrement = 'wide' === 'wide' ? 0 : 1;
+    const extraType: string = 'wide';
+    const ballsFacedIncrement = extraType === 'wide' ? 0 : 1;
     expect(ballsFacedIncrement).toBe(0);
   });
 

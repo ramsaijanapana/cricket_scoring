@@ -1,7 +1,8 @@
 import type { ExpoConfig, ConfigContext } from "expo/config";
-import { colors } from "@cricket/ui/tokens";
 
-const brandGreen = colors.cricket.green;
+// Keep native build configuration self-contained so Expo can evaluate it before
+// workspace TypeScript packages are bundled.
+const brandGreen = "#16a34a";
 
 export default ({ config }: ConfigContext): ExpoConfig => ({
   ...config,
@@ -41,6 +42,7 @@ export default ({ config }: ConfigContext): ExpoConfig => ({
     permissions: ["RECEIVE_BOOT_COMPLETED", "VIBRATE", "POST_NOTIFICATIONS"],
   },
   plugins: [
+    "expo-font",
     "expo-router",
     ["expo-notifications", { icon: "./assets/notification-icon.png", color: brandGreen, sounds: [] }],
     "expo-sqlite",

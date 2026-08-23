@@ -217,12 +217,8 @@ export const socialRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!activityRecord) return reply.status(404).send({ error: 'Activity not found' });
 
-    try {
-      const likeActivity = await publishActivity(userId, 'like', 'activity', req.params.activityId);
-      return reply.status(201).send(likeActivity);
-    } catch (err: any) {
-      throw err;
-    }
+    const likeActivity = await publishActivity(userId, 'like', 'activity', req.params.activityId);
+    return reply.status(201).send(likeActivity);
   });
 
   // DELETE /feed/:activityId/like — unlike an activity

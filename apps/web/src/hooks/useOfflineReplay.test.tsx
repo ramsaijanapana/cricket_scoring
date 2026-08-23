@@ -8,6 +8,8 @@ import { offlineStore } from '../lib/offline-store';
 import { useScoringStore } from '../stores/scoring-store';
 import { api } from '../lib/api';
 
+const emptyRecordDeliveryResult = {} as Awaited<ReturnType<typeof api.recordDelivery>>;
+
 vi.mock('../lib/api', () => ({
   api: {
     recordDelivery: vi.fn().mockResolvedValue({}),
@@ -24,7 +26,7 @@ function createWrapper() {
 describe('replayPendingDeliveries', () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
-    vi.mocked(api.recordDelivery).mockClear().mockResolvedValue({});
+    vi.mocked(api.recordDelivery).mockClear().mockResolvedValue(emptyRecordDeliveryResult);
     useScoringStore.setState({ syncStatus: 'synced', pendingCount: 0 });
   });
 
@@ -63,7 +65,7 @@ describe('replayPendingDeliveries', () => {
 describe('useOfflineReplay', () => {
   beforeEach(() => {
     globalThis.indexedDB = new IDBFactory();
-    vi.mocked(api.recordDelivery).mockClear().mockResolvedValue({});
+    vi.mocked(api.recordDelivery).mockClear().mockResolvedValue(emptyRecordDeliveryResult);
     useScoringStore.setState({ syncStatus: 'synced', pendingCount: 0 });
   });
 

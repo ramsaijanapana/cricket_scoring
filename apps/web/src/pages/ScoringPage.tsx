@@ -1195,12 +1195,12 @@ export function ScoringPage() {
             className="card p-4"
           >
             <LivePredictionChart
-              team1={{ name: teamAName, probability: prediction.winProbA, color: 'var(--color-blue, #3b82f6)' }}
-              team2={{ name: teamBName, probability: prediction.winProbB, color: 'var(--color-green, #22c55e)' }}
+              team1={{ name: teamAName, probability: prediction.win_prob_a, color: 'var(--color-blue, #3b82f6)' }}
+              team2={{ name: teamBName, probability: prediction.win_prob_b, color: 'var(--color-green, #22c55e)' }}
               projectedScore={{
-                low: prediction.projectedScoreLow,
-                mid: Math.round((prediction.projectedScoreLow + prediction.projectedScoreHigh) / 2),
-                high: prediction.projectedScoreHigh,
+                low: prediction.projected_score_low,
+                mid: Math.round((prediction.projected_score_low + prediction.projected_score_high) / 2),
+                high: prediction.projected_score_high,
               }}
               currentScore={currentInnings?.totalRuns ?? inningsScore}
             />

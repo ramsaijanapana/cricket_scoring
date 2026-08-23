@@ -9,7 +9,7 @@ function mockRequest(overrides: {
 } = {}): FastifyRequest {
   const req = { headers: overrides.headers ?? {} } as FastifyRequest & { user?: unknown };
   if (overrides.user !== undefined) {
-    req.user = overrides.user;
+    (req as unknown as { user?: unknown }).user = overrides.user;
   }
   return req;
 }

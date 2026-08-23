@@ -368,7 +368,6 @@ export const scorecardRoutes: FastifyPluginAsync = async (app) => {
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       doc.text(matchRow.resultSummary, pageWidth / 2, y + 3, { align: 'center' });
-      y += 6;
     }
 
     y = 38;

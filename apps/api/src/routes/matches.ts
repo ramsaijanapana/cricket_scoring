@@ -485,7 +485,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
     broadcast.status(req.params.id, {
       status: 'rain_delay',
       reason: req.body.reason,
-      dlsInterruption: dlsInterruptionData,
+      dls_interruption: dlsInterruptionData,
     });
 
     return updated;
@@ -597,7 +597,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
     broadcast.status(req.params.id, {
       status: 'resumed',
       reason: 'Match resumed',
-      dlsState,
+      dls_state: dlsState,
     });
 
     return { ...updated, dlsState };

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
-import Fastify from 'fastify';
+import Fastify, { type FastifyRequest } from 'fastify';
 import fastifyJwt from '@fastify/jwt';
 import { env } from '../config';
 
@@ -60,7 +60,7 @@ describe('Tournament routes', () => {
     app = Fastify();
     await app.register(fastifyJwt, { secret: 'test-secret' });
 
-    app.addHook('onRequest', async (request) => {
+    app.addHook('onRequest', async (request: FastifyRequest) => {
       const authHeader = request.headers.authorization;
       if (authHeader?.startsWith('Bearer ')) {
         try {

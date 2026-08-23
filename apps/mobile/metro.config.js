@@ -15,8 +15,10 @@ config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(monorepoRoot, "node_modules"),
 ];
-
-// Ensure packages/shared is resolved correctly
-config.resolver.disableHierarchicalLookup = true;
+config.resolver.extraNodeModules = {
+  ...config.resolver.extraNodeModules,
+  "@cricket/shared": path.resolve(monorepoRoot, "packages/shared"),
+  "@cricket/ui": path.resolve(monorepoRoot, "packages/ui/src"),
+};
 
 module.exports = withNativeWind(config, { input: "./global.css" });

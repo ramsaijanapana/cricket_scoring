@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-08-23T17:05:51.791Z
+- Updated: 2026-08-23T17:28:30.851Z
 - Branch: wip/publish-readiness-classification
-- Head: dadd810
+- Head: e9c5a7a
 - Focus: P3 live commentary
 
 ## Latest Summary
 
-- Audited CricScore mobile store readiness on 2026-08-23. Confirmed com.cricscore.app is not registered with Apple, no App Store Connect record exists, EAS and submit identifiers are blank, configured production/staging API hosts are unreachable, and Android release credentials are unavailable. Added docs/PUBLISH_READINESS_STATUS_2026-08-23.md; no app, backend, deployment, or store state was changed.
+- Completed 2026-08-23 publish-readiness repair: ESLint 10 migration, 309 passing tests, green API/web/mobile production builds, Expo SDK 52 dependency repair, patched API auth/server toolchain, Vite/Vitest upgrades, and documented external/store blockers.
 
 ## Next Steps
 
-- Deploy and validate production infrastructure, register store identities, establish signing and service credentials, complete listing/privacy assets, then verify an immutable native release candidate before any store upload.
+- Provision API and store infrastructure, migrate Expo SDK 52 to a patched supported SDK, register com.cricscore.app, configure EAS/signing credentials, then produce signed store candidates.
 
 ## Risks / Watchouts
 
@@ -31,11 +31,37 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 1
-- Staged files: 1
-- docs/PUBLISH_READINESS_STATUS_2026-08-23.md
+- Changed files: 27
+- Staged files: 0
+- pps/api/package.json
+- apps/api/src/engine/scoring-engine.test.ts
+- apps/api/src/middleware/auth.test.ts
+- apps/api/src/routes/broadcaster.ts
+- apps/api/src/routes/deliveries.integration.test.ts
+- apps/api/src/routes/matches.test.ts
+- apps/api/src/routes/matches.ts
+- apps/api/src/routes/scorecard.ts
+- apps/api/src/routes/social.ts
+- apps/api/src/routes/tournaments.test.ts
+- apps/api/src/routes/users.test.ts
+- apps/api/src/services/storage-service.ts
+- apps/mobile/app.config.ts
+- apps/mobile/metro.config.js
+- apps/mobile/package.json
+- apps/web/package.json
+- apps/web/src/components/CommentaryFeed.tsx
+- apps/web/src/hooks/useOfflineReplay.test.tsx
+- apps/web/src/hooks/useScorecardWithCache.test.ts
+- apps/web/src/lib/match-cache.ts
+- +7 more changed files
 
 ## Recent Checkpoints
+
+### 2026-08-23T17:28:30.851Z — P3 live commentary
+
+- Actor: dev
+- Summary: Completed 2026-08-23 publish-readiness repair: ESLint 10 migration, 309 passing tests, green API/web/mobile production builds, Expo SDK 52 dependency repair, patched API auth/server toolchain, Vite/Vitest upgrades, and documented external/store blockers.
+- Next: Provision API and store infrastructure, migrate Expo SDK 52 to a patched supported SDK, register com.cricscore.app, configure EAS/signing credentials, then produce signed store candidates.
 
 ### 2026-08-23T17:05:51.791Z — P3 live commentary
 
@@ -63,13 +89,6 @@
 - Summary: P3 a11y: @axe-core/playwright e2e for Home/Login/Scoring; Layout/NotificationBell/ScoringPage modal+keyboard fixes; contrast tokens; CommentaryEditor syntax fix
 - Next: Continue P3 sprint or wire a11y into CI
 - Verified: Playwright 12/12; web vitest 82/82
-
-### 2026-06-22T15:16:26.155Z — P3 mobile polish
-
-- Actor: test
-- Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
-- Next: Continue P3 sprint agents; commit when ready
-- Verified: apps/mobile tsc clean; npm test 56/56
 
 ## Workflow Rule
 

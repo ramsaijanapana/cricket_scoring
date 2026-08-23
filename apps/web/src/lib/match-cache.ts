@@ -48,7 +48,24 @@ export function parseOversDecimal(overs: string | number): number {
 }
 
 export function normalizeWsScore(payload: WsDeliveryPayload): NormalizedScore | null {
-  const snap = normalizeScoreSnapshot(payload);
+  const delivery = payload.delivery;
+  const completeDelivery = delivery
+    && delivery.inningsScore !== undefined
+    && delivery.inningsWickets !== undefined
+    && delivery.inningsOvers !== undefined
+    && delivery.runRate !== undefined
+    ? {
+        inningsScore: delivery.inningsScore,
+        inningsWickets: delivery.inningsWickets,
+        inningsOvers: delivery.inningsOvers,
+        runRate: delivery.runRate,
+      }
+    : undefined;
+  const snap = normalizeScoreSnapshot({
+    scorecard_snapshot: payload.scorecard_snapshot,
+    scorecardSnapshot: payload.scorecardSnapshot,
+    delivery: completeDelivery,
+  });
   if (!snap) return null;
   return {
     inningsScore: snap.innings_score,
