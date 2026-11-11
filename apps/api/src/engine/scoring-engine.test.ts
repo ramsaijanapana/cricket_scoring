@@ -1,6 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
+  bowlerChargeableRuns,
+  countsTowardOver,
+  crossingRuns,
   resolveStrikerRotation,
+  scoredDeliveryRuns,
+} from '@cricket/shared';
+import {
   checkInningsCompletion,
   scoringEngine,
 } from './scoring-engine';
@@ -25,7 +31,7 @@ import {
  */
 
 function isLegalDelivery(extraType: string | null): boolean {
-  return extraType !== 'wide' && extraType !== 'noball';
+  return countsTowardOver(extraType);
 }
 
 function computeRunRate(totalRuns: number, completedOvers: number, ballsInCurrentOver: number, ballsPerOver: number): number {
@@ -59,6 +65,10 @@ describe('ScoringEngine — Legal Delivery Classification', () => {
 
   it('leg-bye is legal', () => {
     expect(isLegalDelivery('legbye')).toBe(true);
+  });
+
+  it('penalty is NOT a ball of the over', () => {
+    expect(isLegalDelivery('penalty')).toBe(false);
   });
 });
 
@@ -186,6 +196,92 @@ describe('ScoringEngine — Strike Rotation', () => {
       expect(result.newStrikerId).toBe(B);
       expect(result.newNonStrikerId).toBe(A);
     });
+  });
+
+  describe('client extra contract', () => {
+    function rotate(
+      runsBatsman: number,
+      runsExtras: number,
+      extraType: 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty' | null,
+      overCompleted = false,
+    ) {
+      return resolveStrikerRotation(
+        A, B,
+        crossingRuns(runsBatsman, runsExtras, extraType),
+        extraType === 'wide',
+        countsTowardOver(extraType),
+        overCompleted,
+        false,
+      );
+    }
+
+    it('1 bye crosses so the non-striker faces', () => {
+      const result = rotate(0, 1, 'bye');
+      expect(result.newStrikerId).toBe(B);
+      expect(result.newNonStrikerId).toBe(A);
+    });
+
+    it('2 byes do not cross', () => {
+      expect(rotate(0, 2, 'bye').newStrikerId).toBe(A);
+    });
+
+    it('1 leg-bye crosses', () => {
+      expect(rotate(0, 1, 'legbye').newStrikerId).toBe(B);
+    });
+
+    it('a plain wide does not cross', () => {
+      expect(rotate(0, 1, 'wide').newStrikerId).toBe(A);
+    });
+
+    it('a wide with one run taken crosses', () => {
+      expect(rotate(0, 2, 'wide').newStrikerId).toBe(B);
+    });
+
+    it('a wide with two runs taken does not cross', () => {
+      expect(rotate(0, 3, 'wide').newStrikerId).toBe(A);
+    });
+
+    it('one off the bat on a no-ball crosses, ignoring the penalty', () => {
+      expect(rotate(1, 1, 'noball').newStrikerId).toBe(B);
+    });
+
+    it('a penalty does not cross', () => {
+      expect(rotate(5, 5, 'penalty').newStrikerId).toBe(A);
+    });
+
+    it('1 bye on the last ball of the over leaves the original striker on strike', () => {
+      expect(rotate(0, 1, 'bye', true).newStrikerId).toBe(A);
+    });
+  });
+});
+
+describe('ScoringEngine — extras accounting', () => {
+  it('counts a duplicated penalty once and not as batsman runs', () => {
+    expect(scoredDeliveryRuns(5, 5, 'penalty')).toEqual({
+      runsBatsman: 0,
+      runsExtras: 5,
+      totalRuns: 5,
+    });
+  });
+
+  it('keeps bye runs as team extras', () => {
+    expect(scoredDeliveryRuns(0, 1, 'bye')).toEqual({
+      runsBatsman: 0,
+      runsExtras: 1,
+      totalRuns: 1,
+    });
+  });
+
+  it('does not charge byes, leg-byes, or penalties to the bowler', () => {
+    expect(bowlerChargeableRuns(0, 4, 'bye')).toBe(0);
+    expect(bowlerChargeableRuns(0, 1, 'legbye')).toBe(0);
+    expect(bowlerChargeableRuns(0, 5, 'penalty')).toBe(0);
+  });
+
+  it('charges wides, no-balls, and bat runs to the bowler', () => {
+    expect(bowlerChargeableRuns(0, 2, 'wide')).toBe(2);
+    expect(bowlerChargeableRuns(4, 1, 'noball')).toBe(5);
+    expect(bowlerChargeableRuns(1, 0, null)).toBe(1);
   });
 });
 

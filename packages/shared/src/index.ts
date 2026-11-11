@@ -1,5 +1,15 @@
 export * from './types';
 export {
+  scoredDeliveryRuns,
+  crossingRuns,
+  bowlerChargeableRuns,
+  countsTowardOver,
+  countsAsBallFaced,
+  resolveStrikerRotation,
+  type DeliveryExtraType,
+  type ScoredDeliveryRuns,
+} from './scoring-rules';
+export {
   registerSchema,
   loginSchema,
   createMatchSchema,

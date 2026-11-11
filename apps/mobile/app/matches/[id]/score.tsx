@@ -33,6 +33,12 @@ import {
   syncPendingDeliveries,
   showSyncConflictAlert,
 } from "../../../lib/offline-sync";
+import {
+  chooseStrike,
+  predictStrikeAfterDelivery,
+  strikeFromEnds,
+  type StrikePair,
+} from "../../../lib/strike";
 
 const RUN_BUTTONS = [0, 1, 2, 3, 4, 6] as const;
 
@@ -52,7 +58,7 @@ function getCurrentInnings(match: any) {
   );
 }
 
-function getScoringContext(match: any, currentInnings: any) {
+function getScoringContext(match: any, currentInnings: any, preferred: StrikePair | null = null) {
   const battingTeam = match?.teams?.find(
     (t: any) => t.teamId === currentInnings?.battingTeamId,
   );
@@ -79,8 +85,19 @@ function getScoringContext(match: any, currentInnings: any) {
         parseFloat(String(b.oversBowled || 0)) - parseFloat(String(a.oversBowled || 0)),
     );
 
-  const strikerId = notOutBatsmen[0]?.playerId ?? battingXi[0] ?? "";
-  const nonStrikerId = notOutBatsmen[1]?.playerId ?? battingXi[1] ?? "";
+  const notOutIds = new Set<string>(
+    battingScorecard.filter((b: any) => !b.isOut).map((b: any) => String(b.playerId)),
+  );
+  const chosen = chooseStrike(
+    preferred,
+    {
+      strikerId: notOutBatsmen[0]?.playerId ?? battingXi[0] ?? "",
+      nonStrikerId: notOutBatsmen[1]?.playerId ?? battingXi[1] ?? "",
+    },
+    notOutIds,
+  );
+  const strikerId = chosen.strikerId;
+  const nonStrikerId = chosen.nonStrikerId;
   const bowlerId = activeBowlers[0]?.playerId ?? bowlingXi[0] ?? "";
 
   return {
@@ -102,11 +119,16 @@ function buildDeliveryPayload(
   runs: number,
   selectedExtra: RecordDeliveryInput["extra_type"],
   isWicket: boolean,
+  preferredStrike: StrikePair | null,
 ): RecordDeliveryInput | null {
   const currentInnings = getCurrentInnings(match);
   if (!currentInnings) return null;
 
-  const { strikerId, nonStrikerId, bowlerId } = getScoringContext(match, currentInnings);
+  const { strikerId, nonStrikerId, bowlerId } = getScoringContext(
+    match,
+    currentInnings,
+    preferredStrike,
+  );
   if (!strikerId || !nonStrikerId || !bowlerId) return null;
 
   const payload: RecordDeliveryInput = {
@@ -152,7 +174,9 @@ export default function LiveScoringScreen() {
   const [isWicket, setIsWicket] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [isConnected, setIsConnected] = useState(true);
+  const [rememberedStrike, setRememberedStrike] = useState<StrikePair | null>(null);
   const unsubMatchEvent = useRef<(() => void) | null>(null);
+  const strikeHistory = useRef<Array<StrikePair | null>>([]);
   const undoStackPosRef = useRef(0);
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
@@ -279,11 +303,31 @@ export default function LiveScoringScreen() {
   const recordBall = async (runs: number) => {
     if (!id || submitting || !match) return;
 
-    const payload = buildDeliveryPayload(match, runs, selectedExtra, isWicket);
+    const payload = buildDeliveryPayload(match, runs, selectedExtra, isWicket, rememberedStrike);
     if (!payload) {
       Alert.alert("Error", "Match is not ready for scoring yet");
       return;
     }
+    const inningsBefore = getCurrentInnings(match);
+    const usedStrike = inningsBefore
+      ? getScoringContext(match, inningsBefore, rememberedStrike)
+      : null;
+    strikeHistory.current.push(rememberedStrike);
+    let strikeCommitted = false;
+    const rememberPredictedStrike = () => {
+      strikeCommitted = true;
+      if (!usedStrike?.strikerId || !usedStrike.nonStrikerId) {
+        setRememberedStrike(null);
+        return;
+      }
+      setRememberedStrike(
+        predictStrikeAfterDelivery(
+          { strikerId: usedStrike.strikerId, nonStrikerId: usedStrike.nonStrikerId },
+          payload,
+          String(inningsBefore?.totalOvers ?? "0.0"),
+        ),
+      );
+    };
 
     payload.expected_stack_pos = undoStackPosRef.current;
 
@@ -311,9 +355,15 @@ export default function LiveScoringScreen() {
             undoStackPosRef.current + 1;
           undoStackPosRef.current = nextPos;
           await setUndoStackPos(id, nextPos);
+          const fromServer = strikeFromEnds(result.newStrikerId, result.newNonStrikerId);
+          if (fromServer) {
+            strikeCommitted = true;
+            setRememberedStrike(fromServer);
+          } else rememberPredictedStrike();
           await fetchMatch();
         } catch (err) {
           if (err instanceof ApiError && err.status === 409) {
+            strikeHistory.current.pop();
             setMatch(previousMatch);
             await handleSyncConflict(err.message);
             return;
@@ -323,17 +373,20 @@ export default function LiveScoringScreen() {
           undoStackPosRef.current += 1;
           await setUndoStackPos(id, undoStackPosRef.current);
           await refreshPendingCount();
+          rememberPredictedStrike();
         }
       } else {
         await queueDelivery(id, payload);
         undoStackPosRef.current += 1;
         await setUndoStackPos(id, undoStackPosRef.current);
         await refreshPendingCount();
+        rememberPredictedStrike();
       }
 
       setSelectedExtra(null);
       setIsWicket(false);
     } catch (err: any) {
+      if (!strikeCommitted) strikeHistory.current.pop();
       setMatch(previousMatch);
       Alert.alert("Error", err.message || "Failed to record delivery");
     } finally {
@@ -349,6 +402,7 @@ export default function LiveScoringScreen() {
       const lastPayload = await removeLastPendingDelivery(id);
       if (lastPayload) {
         setMatch((current: any) => reverseOptimisticDelivery(current, lastPayload));
+        setRememberedStrike(strikeHistory.current.pop() ?? null);
         undoStackPosRef.current = Math.max(0, undoStackPosRef.current - 1);
         await setUndoStackPos(id, undoStackPosRef.current);
         await refreshPendingCount();
@@ -358,6 +412,7 @@ export default function LiveScoringScreen() {
       const online = await isOnline();
       if (!online) {
         await queueUndo(id, currentInnings.id);
+        setRememberedStrike(strikeHistory.current.pop() ?? null);
         undoStackPosRef.current = Math.max(0, undoStackPosRef.current - 1);
         await setUndoStackPos(id, undoStackPosRef.current);
         Alert.alert("Offline", "Undo queued for sync when you reconnect.");
@@ -365,6 +420,7 @@ export default function LiveScoringScreen() {
       }
 
       await api.undoLastBall(id, currentInnings.id);
+      setRememberedStrike(strikeHistory.current.pop() ?? null);
       undoStackPosRef.current = Math.max(0, undoStackPosRef.current - 1);
       await setUndoStackPos(id, undoStackPosRef.current);
       await fetchMatch();
@@ -392,7 +448,9 @@ export default function LiveScoringScreen() {
   }
 
   const currentInnings = getCurrentInnings(match);
-  const scoringContext = currentInnings ? getScoringContext(match, currentInnings) : null;
+  const scoringContext = currentInnings
+    ? getScoringContext(match, currentInnings, rememberedStrike)
+    : null;
   const inn = currentInnings;
   const score = inn?.totalRuns ?? 0;
   const wickets = inn?.totalWickets ?? 0;

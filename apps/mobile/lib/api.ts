@@ -351,6 +351,8 @@ export const api = {
     request<{
       delivery?: { undoStackPos?: number };
       idempotent?: boolean;
+      newStrikerId?: string;
+      newNonStrikerId?: string;
     }>(`/matches/${matchId}/deliveries`, {
       method: "POST",
       body: JSON.stringify(data),

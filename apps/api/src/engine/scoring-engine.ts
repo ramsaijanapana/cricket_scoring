@@ -4,8 +4,18 @@ import { battingScorecard, bowlingScorecard, fieldingScorecard } from '../db/sch
 import { matchFormatConfig, match } from '../db/schema/index';
 import { eq, and, sql, desc } from 'drizzle-orm';
 import type { DeliveryInput, Commentary as CommentaryType } from '@cricket/shared';
+import {
+  bowlerChargeableRuns,
+  countsAsBallFaced,
+  countsTowardOver,
+  crossingRuns,
+  resolveStrikerRotation,
+  scoredDeliveryRuns,
+} from '@cricket/shared';
 import { CommentaryEngine } from './commentary-engine';
 import { dlsEngine } from './dls-engine';
+
+export { resolveStrikerRotation } from '@cricket/shared';
 
 export interface PowerplayInfo {
   phase: string;         // e.g. "Powerplay", "Middle Overs", "Death Overs"
@@ -62,34 +72,6 @@ export interface ScoringResult {
   };
   /** DLS par score at this point in the chase (null if DLS not active) */
   dlsParScore: number | null;
-}
-
-export function resolveStrikerRotation(
-  strikerId: string, nonStrikerId: string,
-  batsmanRuns: number, isWide: boolean,
-  isLegal: boolean, overCompleted: boolean,
-  isWicket: boolean, dismissedId?: string | null,
-): { newStrikerId: string; newNonStrikerId: string } {
-  let newStriker = strikerId;
-  let newNonStriker = nonStrikerId;
-
-  if (batsmanRuns % 2 === 1) {
-    [newStriker, newNonStriker] = [newNonStriker, newStriker];
-  }
-
-  if (overCompleted) {
-    [newStriker, newNonStriker] = [newNonStriker, newStriker];
-  }
-
-  if (isWicket && dismissedId) {
-    if (dismissedId === newStriker) {
-      newStriker = 'PENDING_NEW_BATSMAN';
-    } else if (dismissedId === newNonStriker) {
-      newNonStriker = 'PENDING_NEW_BATSMAN';
-    }
-  }
-
-  return { newStrikerId: newStriker, newNonStrikerId: newNonStriker };
 }
 
 export function checkInningsCompletion(
@@ -201,9 +183,13 @@ export class ScoringEngine {
         };
       }
 
-      // Determine legality
-      const isLegal = input.extraType !== 'wide' && input.extraType !== 'noball';
-      const totalRuns = input.runsBatsman + input.runsExtras;
+      // Penalty awards are not a delivery: one extras total, no batsman credit,
+      // and no ball of the over. Byes and leg-byes stay legal team runs.
+      const scored = scoredDeliveryRuns(input.runsBatsman, input.runsExtras, input.extraType);
+      input = { ...input, runsBatsman: scored.runsBatsman, runsExtras: scored.runsExtras };
+      const isLegal = countsTowardOver(input.extraType);
+      const totalRuns = scored.totalRuns;
+      const bowlerRuns = bowlerChargeableRuns(input.runsBatsman, input.runsExtras, input.extraType);
 
       // Free-hit detection with carryover chaining:
       // A free hit is triggered after a no-ball. The free-hit chain continues if:
@@ -355,7 +341,7 @@ export class ScoringEngine {
       await tx.update(over).set({
         legalBalls: newLegalBalls,
         totalBalls: activeOver.totalBalls + 1,
-        runsConceded: sql`${over.runsConceded} + ${totalRuns}`,
+        runsConceded: sql`${over.runsConceded} + ${bowlerRuns}`,
         wicketsTaken: input.isWicket ? sql`${over.wicketsTaken} + 1` : over.wicketsTaken,
       }).where(eq(over.id, activeOver.id));
 
@@ -436,7 +422,8 @@ export class ScoringEngine {
       // Striker rotation
       const { newStrikerId, newNonStrikerId } = resolveStrikerRotation(
         input.strikerId, input.nonStrikerId,
-        input.runsBatsman, input.extraType === 'wide',
+        crossingRuns(input.runsBatsman, input.runsExtras, input.extraType),
+        input.extraType === 'wide',
         isLegal, overCompleted,
         input.isWicket, input.dismissedId,
       );
@@ -536,9 +523,14 @@ export class ScoringEngine {
       });
 
       // Derived values from the undone delivery
-      const isLegal = lastDelivery.extraType !== 'wide' && lastDelivery.extraType !== 'noball';
+      const isLegal = countsTowardOver(lastDelivery.extraType);
       const totalRuns = lastDelivery.totalRuns;
-      const ballsFacedDecrement = lastDelivery.extraType === 'wide' ? 0 : 1;
+      const bowlerRuns = bowlerChargeableRuns(
+        lastDelivery.runsBatsman,
+        lastDelivery.runsExtras,
+        lastDelivery.extraType,
+      );
+      const ballsFacedDecrement = countsAsBallFaced(lastDelivery.extraType) ? 1 : 0;
       const isBowlerWicket = lastDelivery.isWicket && this.isBowlerWicket(lastDelivery.wicketType);
 
       // ── 1. Revert innings totals ──────────────────────────────────────────
@@ -586,7 +578,7 @@ export class ScoringEngine {
           fours: lastDelivery.runsBatsman === 4 ? batCard.fours - 1 : batCard.fours,
           sixes: lastDelivery.runsBatsman === 6 ? batCard.sixes - 1 : batCard.sixes,
           strikeRate: newBalls > 0 ? ((newRuns / newBalls) * 100).toFixed(2) : '0',
-          dots: lastDelivery.runsBatsman === 0 && lastDelivery.extraType !== 'wide'
+          dots: countsAsBallFaced(lastDelivery.extraType) && lastDelivery.runsBatsman === 0
             ? batCard.dots - 1 : batCard.dots,
           singles: lastDelivery.runsBatsman === 1 ? batCard.singles - 1 : batCard.singles,
           doubles: lastDelivery.runsBatsman === 2 ? batCard.doubles - 1 : batCard.doubles,
@@ -641,7 +633,7 @@ export class ScoringEngine {
           }
         }
 
-        const newRunsConceded = bowlCard.runsConceded - totalRuns;
+        const newRunsConceded = bowlCard.runsConceded - bowlerRuns;
 
         // Recalculate economy rate
         const oversParts = String(newOversBowled).split('.');
@@ -702,7 +694,7 @@ export class ScoringEngine {
 
         if (endedPartnership) {
           // Reopen and decrement runs/balls
-          const ballsDecrement = lastDelivery.extraType === 'wide' ? 0 : 1;
+          const ballsDecrement = countsAsBallFaced(lastDelivery.extraType) ? 1 : 0;
           await tx.update(partnership).set({
             isActive: true,
             endedAtRuns: null,
@@ -726,7 +718,7 @@ export class ScoringEngine {
         });
 
         if (activePartnership) {
-          const ballsDecrement = lastDelivery.extraType === 'wide' ? 0 : 1;
+          const ballsDecrement = countsAsBallFaced(lastDelivery.extraType) ? 1 : 0;
           await tx.update(partnership).set({
             runs: activePartnership.runs - totalRuns,
             balls: activePartnership.balls - ballsDecrement,
@@ -756,7 +748,7 @@ export class ScoringEngine {
           await tx.update(over).set({
             legalBalls: newLegalBalls,
             totalBalls: newTotalBalls,
-            runsConceded: sql`${over.runsConceded} - ${totalRuns}`,
+            runsConceded: sql`${over.runsConceded} - ${bowlerRuns}`,
             wicketsTaken: lastDelivery.isWicket ? sql`${over.wicketsTaken} - 1` : over.wicketsTaken,
             maidens: revertMaiden ? false : overRecord.maidens,
           }).where(eq(over.id, overRecord.id));
@@ -896,7 +888,8 @@ export class ScoringEngine {
   }
 
   private async updateBattingScorecard(input: DeliveryInput, inningsId: string, isLegal: boolean, tx: TxOrDb = db) {
-    const ballsFacedIncrement = input.extraType === 'wide' ? 0 : 1;
+    const ballsFacedIncrement = countsAsBallFaced(input.extraType) ? 1 : 0;
+    const isBattingDot = ballsFacedIncrement === 1 && input.runsBatsman === 0;
 
     const existing = await tx.query.battingScorecard.findFirst({
       where: and(
@@ -914,7 +907,7 @@ export class ScoringEngine {
         fours: input.runsBatsman === 4 ? existing.fours + 1 : existing.fours,
         sixes: input.runsBatsman === 6 ? existing.sixes + 1 : existing.sixes,
         strikeRate: newBalls > 0 ? ((newRuns / newBalls) * 100).toFixed(2) : '0',
-        dots: input.runsBatsman === 0 && input.extraType !== 'wide' ? existing.dots + 1 : existing.dots,
+        dots: isBattingDot ? existing.dots + 1 : existing.dots,
         singles: input.runsBatsman === 1 ? existing.singles + 1 : existing.singles,
         doubles: input.runsBatsman === 2 ? existing.doubles + 1 : existing.doubles,
         triples: input.runsBatsman === 3 ? existing.triples + 1 : existing.triples,
@@ -941,7 +934,7 @@ export class ScoringEngine {
         fours: input.runsBatsman === 4 ? 1 : 0,
         sixes: input.runsBatsman === 6 ? 1 : 0,
         strikeRate: ballsFacedIncrement > 0 ? ((input.runsBatsman / ballsFacedIncrement) * 100).toFixed(2) : '0',
-        dots: input.runsBatsman === 0 && input.extraType !== 'wide' ? 1 : 0,
+        dots: isBattingDot ? 1 : 0,
         singles: input.runsBatsman === 1 ? 1 : 0,
         doubles: input.runsBatsman === 2 ? 1 : 0,
         triples: input.runsBatsman === 3 ? 1 : 0,
@@ -985,6 +978,8 @@ export class ScoringEngine {
       ),
     });
 
+    const charged = bowlerChargeableRuns(input.runsBatsman, input.runsExtras, input.extraType);
+
     if (existing) {
       const isBowlerWicket = input.isWicket && this.isBowlerWicket(input.wicketType);
 
@@ -1004,7 +999,7 @@ export class ScoringEngine {
       }
 
       // Calculate economy rate
-      const newRuns = existing.runsConceded + totalRuns;
+      const newRuns = existing.runsConceded + charged;
       const oversParts = String(newOversBowled).split('.');
       const oversWhole = parseInt(oversParts[0], 10) || 0;
       const oversBalls = parseInt(oversParts[1], 10) || 0;
@@ -1030,7 +1025,7 @@ export class ScoringEngine {
       });
       const legalBall = isLegal ? 1 : 0;
       const oversStr = legalBall > 0 ? '0.1' : '0.0';
-      const econ = legalBall > 0 ? (totalRuns * 6).toFixed(2) : '0.00';
+      const econ = legalBall > 0 ? (charged * 6).toFixed(2) : '0.00';
 
       await tx.insert(bowlingScorecard).values({
         inningsId,
@@ -1038,7 +1033,7 @@ export class ScoringEngine {
         teamId: inningsData!.bowlingTeamId,
         bowlingPosition: 0,
         oversBowled: oversStr,
-        runsConceded: totalRuns,
+        runsConceded: charged,
         wicketsTaken: input.isWicket && this.isBowlerWicket(input.wicketType) ? 1 : 0,
         economyRate: econ,
         dots: totalRuns === 0 && isLegal ? 1 : 0,
@@ -1153,7 +1148,7 @@ export class ScoringEngine {
     }
 
     // Update runs and balls
-    const ballsIncrement = input.extraType === 'wide' ? 0 : 1;
+    const ballsIncrement = countsAsBallFaced(input.extraType) ? 1 : 0;
     await tx.update(partnership).set({
       runs: active.runs + totalRuns,
       balls: active.balls + ballsIncrement,
