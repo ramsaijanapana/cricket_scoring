@@ -4,9 +4,9 @@
 
 ## Current State
 
-- Updated: 2026-11-11T11:13:24.902Z
+- Updated: 2026-11-11T11:14:54.593Z
 - Branch: cursor/critical-bug-remediation-1b7b
-- Head: dadd810
+- Head: 0f138c6
 - Focus: scoring extras and strike
 
 ## Latest Summary
@@ -31,20 +31,18 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 10
+- Changed files: 0
 - Staged files: 0
-- apps/api/src/engine/scoring-engine.test.ts
-- apps/api/src/engine/scoring-engine.ts
-- apps/mobile/app/matches/[id]/score.tsx
-- apps/mobile/lib/api.ts
-- apps/mobile/lib/offline-sync.test.ts
-- apps/mobile/lib/offline-sync.ts
-- packages/shared/src/index.ts
-- apps/mobile/lib/strike.test.ts
-- apps/mobile/lib/strike.ts
-- packages/shared/src/scoring-rules.ts
+- No working tree changes detected.
 
 ## Recent Checkpoints
+
+### 2026-11-11T11:14:54.593Z — scoring extras and strike
+
+- Actor: ubuntu
+- Summary: Fix strike rotation for byes, leg-byes, and runs taken on wides, and stop double-counting penalty runs.
+- Next: Review the scoring extras fix.
+- Verified: api scoring-engine.test.ts 111 passed; mobile strike and offline-sync tests 31 passed
 
 ### 2026-11-11T11:13:24.902Z — scoring extras and strike
 
@@ -73,13 +71,6 @@
 - Summary: P3 a11y: @axe-core/playwright e2e for Home/Login/Scoring; Layout/NotificationBell/ScoringPage modal+keyboard fixes; contrast tokens; CommentaryEditor syntax fix
 - Next: Continue P3 sprint or wire a11y into CI
 - Verified: Playwright 12/12; web vitest 82/82
-
-### 2026-06-22T15:16:26.155Z — P3 mobile polish
-
-- Actor: test
-- Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
-- Next: Continue P3 sprint agents; commit when ready
-- Verified: apps/mobile tsc clean; npm test 56/56
 
 ## Workflow Rule
 
