@@ -275,6 +275,41 @@ describe('applyOptimisticDelivery', () => {
     expect(updated).toBe(match);
   });
 
+  it('adds a bye to the team total without charging the bowler', async () => {
+    const { applyOptimisticDelivery } = await import('./offline-sync');
+    const match = baseMatch();
+    const payload = deliveryPayload({
+      extra_type: 'bye',
+      runs_batsman: 0,
+      runs_extras: 1,
+    });
+
+    const updated = applyOptimisticDelivery(match, payload);
+
+    expect(updated.innings[0].totalRuns).toBe(11);
+    expect(updated.innings[0].totalOvers).toBe('2.4');
+    expect(updated.innings[0].battingScorecard[0].runsScored).toBe(8);
+    expect(updated.innings[0].bowlingScorecard[0].runsConceded).toBe(10);
+  });
+
+  it('counts a duplicated penalty once and does not spend a ball', async () => {
+    const { applyOptimisticDelivery } = await import('./offline-sync');
+    const match = baseMatch();
+    const payload = deliveryPayload({
+      extra_type: 'penalty',
+      runs_batsman: 5,
+      runs_extras: 5,
+    });
+
+    const updated = applyOptimisticDelivery(match, payload);
+
+    expect(updated.innings[0].totalRuns).toBe(15);
+    expect(updated.innings[0].totalOvers).toBe('2.3');
+    expect(updated.innings[0].battingScorecard[0].runsScored).toBe(8);
+    expect(updated.innings[0].battingScorecard[0].ballsFaced).toBe(12);
+    expect(updated.innings[0].bowlingScorecard[0].runsConceded).toBe(10);
+  });
+
   it('does not advance overs on a wide', async () => {
     const { applyOptimisticDelivery } = await import('./offline-sync');
     const match = baseMatch();

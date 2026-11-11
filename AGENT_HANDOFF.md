@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-06-22T15:28:24.481Z
-- Branch: main
-- Head: 90b56dd
-- Focus: P3 live commentary
+- Updated: 2026-11-11T11:14:54.593Z
+- Branch: cursor/critical-bug-remediation-1b7b
+- Head: 0f138c6
+- Focus: scoring extras and strike
 
 ## Latest Summary
 
-- P3 A++ sprint: shared UI kit, scoring refactor, match cache, API route tests, mobile offline/haptics tests, CI smoke/a11y, docs/metrics
+- Fix strike rotation for byes, leg-byes, and runs taken on wides, and stop double-counting penalty runs.
 
 ## Next Steps
 
-- Monitor CI on main after push
+- Review the scoring extras fix.
 
 ## Risks / Watchouts
 
@@ -23,39 +23,33 @@
 
 ## Decisions
 
-- Axe scans fail on critical/serious only; keyboard shortcuts 0-6 runs, W wicket
+- Penalty runs are extras only and do not consume a ball. Byes and leg-byes are not charged to the bowler. Crossing runs, not batsman runs alone, rotate the strike.
 
 ## Verification
 
-- npm test: 309 passed (api 171, web 82, mobile 56)
+- api scoring-engine.test.ts 111 passed; mobile strike and offline-sync tests 31 passed
 
 ## Working Tree Snapshot
 
-- Changed files: 136
+- Changed files: 0
 - Staged files: 0
-- agent-context/state.json
-- .env.example
-- .github/workflows/ci.yml
-- .github/workflows/deploy.yml
-- README.md
-- apps/api/.env.example
-- apps/api/src/config.ts
-- apps/api/src/db/index.ts
-- apps/api/src/middleware/metrics.ts
-- apps/api/src/middleware/pagination.ts
-- apps/api/src/routes/analytics.ts
-- apps/api/src/routes/commentary.ts
-- apps/api/src/server.ts
-- apps/api/src/services/notification-service.ts
-- apps/api/src/services/scoring-orchestrator.ts
-- apps/api/src/services/sentry.ts
-- apps/api/src/workers/notification-worker.ts
-- apps/mobile/app.json
-- apps/mobile/app/(tabs)/_layout.tsx
-- apps/mobile/app/(tabs)/chat.tsx
-- +116 more changed files
+- No working tree changes detected.
 
 ## Recent Checkpoints
+
+### 2026-11-11T11:14:54.593Z — scoring extras and strike
+
+- Actor: ubuntu
+- Summary: Fix strike rotation for byes, leg-byes, and runs taken on wides, and stop double-counting penalty runs.
+- Next: Review the scoring extras fix.
+- Verified: api scoring-engine.test.ts 111 passed; mobile strike and offline-sync tests 31 passed
+
+### 2026-11-11T11:13:24.902Z — scoring extras and strike
+
+- Actor: ubuntu
+- Summary: Fix strike rotation for byes, leg-byes, and runs taken on wides, and stop double-counting penalty runs.
+- Next: Review the scoring extras fix.
+- Verified: api scoring-engine.test.ts 111 passed; mobile strike and offline-sync tests 31 passed
 
 ### 2026-06-22T15:28:24.481Z — P3 live commentary
 
@@ -77,20 +71,6 @@
 - Summary: P3 a11y: @axe-core/playwright e2e for Home/Login/Scoring; Layout/NotificationBell/ScoringPage modal+keyboard fixes; contrast tokens; CommentaryEditor syntax fix
 - Next: Continue P3 sprint or wire a11y into CI
 - Verified: Playwright 12/12; web vitest 82/82
-
-### 2026-06-22T15:16:26.155Z — P3 mobile polish
-
-- Actor: test
-- Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
-- Next: Continue P3 sprint agents; commit when ready
-- Verified: apps/mobile tsc clean; npm test 56/56
-
-### 2026-06-22T15:15:59.189Z — P3 contract unification
-
-- Actor: test
-- Summary: P3 contract unification: shared dtos.ts (MatchDetail, Paginated, RecordDeliveryInput, ScorecardSnapshot, RecordDeliveryResult); normalized WS events to snake_case + WS_EVENTS; web/mobile/api migrated off local scoring DTOs
-- Next: Other P3 agents; fix mobile haptics.test.ts parse error (unrelated)
-- Verified: shared build OK; api 171/171; web 82/82; mobile contract tests 40/40; root npm test blocked by haptics.test.ts syntax
 
 ## Workflow Rule
 

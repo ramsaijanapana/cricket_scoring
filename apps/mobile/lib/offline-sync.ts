@@ -1,6 +1,12 @@
 import * as SQLite from "expo-sqlite";
 import * as Network from "expo-network";
 import { Alert } from "react-native";
+import {
+  bowlerChargeableRuns,
+  countsAsBallFaced,
+  countsTowardOver,
+  scoredDeliveryRuns,
+} from "@cricket/shared";
 import { api, ApiError, type RecordDeliveryInput } from "./api";
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -111,7 +117,7 @@ export async function refreshUndoStackPos(matchId: string): Promise<number> {
 // ─── Optimistic scoring ─────────────────────────────────────────────────────
 
 function decrementOvers(currentOvers: string | number, extraType: RecordDeliveryInput["extra_type"]): string {
-  if (extraType === "wide" || extraType === "noball") {
+  if (!countsTowardOver(extraType)) {
     return String(currentOvers ?? "0.0");
   }
 
@@ -130,7 +136,7 @@ function decrementOvers(currentOvers: string | number, extraType: RecordDelivery
 }
 
 function incrementOvers(currentOvers: string | number, extraType: RecordDeliveryInput["extra_type"]): string {
-  if (extraType === "wide" || extraType === "noball") {
+  if (!countsTowardOver(extraType)) {
     return String(currentOvers ?? "0.0");
   }
 
@@ -168,18 +174,22 @@ export function applyOptimisticDelivery(match: any, payload: RecordDeliveryInput
   if (innIdx === -1) return match;
 
   const inn = { ...inningsList[innIdx] };
-  const totalRuns =
-    (inn.totalRuns ?? 0) + (payload.runs_batsman ?? 0) + (payload.runs_extras ?? 0);
+  const scored = scoredDeliveryRuns(
+    payload.runs_batsman ?? 0,
+    payload.runs_extras ?? 0,
+    payload.extra_type,
+  );
+  const totalRuns = (inn.totalRuns ?? 0) + scored.totalRuns;
   const totalWickets = (inn.totalWickets ?? 0) + (payload.is_wicket ? 1 : 0);
   const totalOvers = incrementOvers(inn.totalOvers ?? "0.0", payload.extra_type ?? null);
 
   const battingScorecard = (inn.battingScorecard ?? []).map((entry: any) => {
     if (entry.playerId !== payload.striker_id) return entry;
 
-    const ballsIncrement = payload.extra_type === "wide" ? 0 : 1;
+    const ballsIncrement = countsAsBallFaced(payload.extra_type) ? 1 : 0;
     return {
       ...entry,
-      runsScored: (entry.runsScored ?? 0) + (payload.runs_batsman ?? 0),
+      runsScored: (entry.runsScored ?? 0) + scored.runsBatsman,
       ballsFaced: (entry.ballsFaced ?? 0) + ballsIncrement,
       isOut: payload.is_wicket ? true : entry.isOut,
     };
@@ -190,8 +200,7 @@ export function applyOptimisticDelivery(match: any, payload: RecordDeliveryInput
 
     const runsConceded =
       (entry.runsConceded ?? 0) +
-      (payload.runs_batsman ?? 0) +
-      (payload.runs_extras ?? 0);
+      bowlerChargeableRuns(scored.runsBatsman, scored.runsExtras, payload.extra_type);
 
     return {
       ...entry,
@@ -231,18 +240,22 @@ export function reverseOptimisticDelivery(match: any, payload: RecordDeliveryInp
   if (innIdx === -1) return match;
 
   const inn = { ...inningsList[innIdx] };
-  const totalRuns =
-    (inn.totalRuns ?? 0) - (payload.runs_batsman ?? 0) - (payload.runs_extras ?? 0);
+  const scored = scoredDeliveryRuns(
+    payload.runs_batsman ?? 0,
+    payload.runs_extras ?? 0,
+    payload.extra_type,
+  );
+  const totalRuns = (inn.totalRuns ?? 0) - scored.totalRuns;
   const totalWickets = (inn.totalWickets ?? 0) - (payload.is_wicket ? 1 : 0);
   const totalOvers = decrementOvers(inn.totalOvers ?? "0.0", payload.extra_type ?? null);
 
   const battingScorecard = (inn.battingScorecard ?? []).map((entry: any) => {
     if (entry.playerId !== payload.striker_id) return entry;
 
-    const ballsDecrement = payload.extra_type === "wide" ? 0 : 1;
+    const ballsDecrement = countsAsBallFaced(payload.extra_type) ? 1 : 0;
     return {
       ...entry,
-      runsScored: Math.max(0, (entry.runsScored ?? 0) - (payload.runs_batsman ?? 0)),
+      runsScored: Math.max(0, (entry.runsScored ?? 0) - scored.runsBatsman),
       ballsFaced: Math.max(0, (entry.ballsFaced ?? 0) - ballsDecrement),
       isOut: payload.is_wicket ? false : entry.isOut,
     };
@@ -253,8 +266,7 @@ export function reverseOptimisticDelivery(match: any, payload: RecordDeliveryInp
 
     const runsConceded =
       (entry.runsConceded ?? 0) -
-      (payload.runs_batsman ?? 0) -
-      (payload.runs_extras ?? 0);
+      bowlerChargeableRuns(scored.runsBatsman, scored.runsExtras, payload.extra_type);
 
     return {
       ...entry,
