@@ -184,4 +184,92 @@ describe('POST /api/v1/matches/:id/start', () => {
     expect(dbMocks.insert).toHaveBeenCalledTimes(4);
     expect(dbMocks.matchTeamFindFirst).toHaveBeenCalledOnce();
   });
+
+  it('rejects a spectator before any match write', async () => {
+    const token = app.jwt.sign({ sub: 'spectator-1', roles: ['spectator'] });
+
+    const res = await app.inject({
+      method: 'POST',
+      url: START_URL,
+      headers: { authorization: `Bearer ${token}` },
+      payload: startPayload,
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: { code: 'FORBIDDEN', message: 'Insufficient permissions' },
+    });
+    expect(dbMocks.matchFindFirst).not.toHaveBeenCalled();
+    expect(dbMocks.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('DELETE /api/v1/matches/:id', () => {
+  let app: ReturnType<typeof Fastify>;
+  const originalAllowDevAuth = env.ALLOW_DEV_AUTH;
+  const deleteUrl = `/api/v1/matches/${MATCH_ID}`;
+
+  beforeAll(async () => {
+    env.ALLOW_DEV_AUTH = false;
+    app = Fastify();
+    await app.register(fastifyJwt, { secret: 'test-secret' });
+    app.addHook('onRequest', async (request) => {
+      const authHeader = request.headers.authorization;
+      if (authHeader?.startsWith('Bearer ')) {
+        try {
+          const decoded = await request.jwtVerify();
+          (request as any).user = decoded;
+        } catch {
+          // leave user unset — route preHandler will reject
+        }
+      }
+    });
+    await app.register(matchRoutes, { prefix: '/api/v1/matches' });
+    await app.ready();
+  });
+
+  afterAll(async () => {
+    env.ALLOW_DEV_AUTH = originalAllowDevAuth;
+    await app.close();
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('rejects a spectator so a live match cannot be soft-deleted', async () => {
+    const token = app.jwt.sign({ sub: 'spectator-1', roles: ['spectator'] });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: deleteUrl,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(403);
+    expect(JSON.parse(res.body)).toEqual({
+      error: { code: 'FORBIDDEN', message: 'Insufficient permissions' },
+    });
+    expect(dbMocks.matchFindFirst).not.toHaveBeenCalled();
+    expect(dbMocks.update).not.toHaveBeenCalled();
+  });
+
+  it('soft-deletes when the caller is a scorer', async () => {
+    dbMocks.matchFindFirst.mockResolvedValueOnce({ id: MATCH_ID, isDeleted: false });
+    dbMocks.returning.mockResolvedValueOnce([{ id: MATCH_ID }]);
+    const token = app.jwt.sign({ sub: 'scorer-1', roles: ['scorer'] });
+
+    const res = await app.inject({
+      method: 'DELETE',
+      url: deleteUrl,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({ success: true, id: MATCH_ID });
+    expect(dbMocks.update).toHaveBeenCalled();
+    expect(dbMocks.set).toHaveBeenCalledWith(
+      expect.objectContaining({ isDeleted: true, deletedAt: expect.any(Date) }),
+    );
+  });
 });
