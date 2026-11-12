@@ -291,7 +291,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       bowlingTeamId: string;
       battingOrder: string[]; // player IDs in batting order
     };
-  }>('/:id/start', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id/start', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -394,7 +394,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       winMarginRuns: number;
       winMarginWickets: number;
     }>;
-  }>('/:id', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     // Validate status transition if status is being changed
     if (req.body.status) {
       const currentMatch = await db.query.match.findFirst({
@@ -429,7 +429,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
   app.post<{
     Params: { id: string };
     Body: { winner_id: string; decision: 'bat' | 'field' };
-  }>('/:id/toss', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id/toss', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const [updated] = await db.update(match).set({
       tossWinnerTeamId: req.body.winner_id,
       tossDecision: req.body.decision,
@@ -445,7 +445,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
   app.post<{
     Params: { id: string };
     Body: { reason: string; timestamp?: string };
-  }>('/:id/interruption', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id/interruption', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -496,7 +496,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
   app.post<{
     Params: { id: string };
     Body: { timestamp?: string; revised_overs?: number };
-  }>('/:id/resume', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id/resume', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -703,7 +703,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       battingOrder: string[]; // exactly 2 batsmen for super over
       bowlerId: string;       // selected bowler
     };
-  }>('/:id/super-over', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id/super-over', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -897,7 +897,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       reason?: string;
       inningsId?: string;
     };
-  }>('/:id/substitutions', { preHandler: [requireAuth] }, async (req, reply) => {
+  }>('/:id/substitutions', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const matchData = await db.query.match.findFirst({
       where: eq(match.id, req.params.id),
     });
@@ -931,7 +931,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
   });
 
   // Soft-delete match
-  app.delete<{ Params: { id: string } }>('/:id', { preHandler: [requireAuth] }, async (req, reply) => {
+  app.delete<{ Params: { id: string } }>('/:id', { preHandler: [requireAuth, requireRole('scorer', 'admin')] }, async (req, reply) => {
     const existing = await db.query.match.findFirst({
       where: and(eq(match.id, req.params.id), eq(match.isDeleted, false)),
     });
@@ -951,7 +951,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
   // Assign scorer to a match
   app.post<{ Params: { id: string } }>(
     '/:id/scorers',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireRole('scorer', 'admin')] },
     async (req, reply) => {
       const body = req.body as { userId: string; slot?: number };
       if (!body.userId) {
@@ -988,7 +988,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
   // Revoke scorer
   app.delete<{ Params: { id: string; userId: string } }>(
     '/:id/scorers/:userId',
-    { preHandler: [requireAuth] },
+    { preHandler: [requireAuth, requireRole('scorer', 'admin')] },
     async (req, reply) => {
       const m = await db.query.match.findFirst({
         where: eq(match.id, req.params.id),
