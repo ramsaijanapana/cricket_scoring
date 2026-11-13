@@ -11,6 +11,7 @@ interface PendingDelivery {
   payload: string;
   createdAt: string;
   synced: number; // 0 or 1
+  opSeq?: number | null;
 }
 
 export interface SyncConflictInfo {
@@ -36,6 +37,60 @@ interface ThisOverBall {
 
 let db: SQLite.SQLiteDatabase | null = null;
 
+async function ensureOpSeqColumn(
+  database: SQLite.SQLiteDatabase,
+  table: "pending_deliveries" | "pending_undos",
+): Promise<void> {
+  const columns =
+    (await database.getAllAsync<{ name: string }>(`PRAGMA table_info(${table})`)) ?? [];
+  if (!columns.some((column) => column.name === "opSeq")) {
+    await database.execAsync(`ALTER TABLE ${table} ADD COLUMN opSeq INTEGER`);
+  }
+}
+
+/**
+ * One counter for deliveries and undos. Separate AUTOINCREMENT ids cannot
+ * order an undo that must hit the server before the ball scored after it.
+ */
+async function allocateOpSeq(database: SQLite.SQLiteDatabase): Promise<number> {
+  const row = await database.getFirstAsync<{ next: number }>(
+    "SELECT next FROM sync_op_seq WHERE id = 1",
+  );
+  const seq = row?.next ?? 1;
+  if (row) {
+    await database.runAsync("UPDATE sync_op_seq SET next = ? WHERE id = 1", [seq + 1]);
+  } else {
+    await database.runAsync("INSERT INTO sync_op_seq (id, next) VALUES (1, ?)", [seq + 1]);
+  }
+  return seq;
+}
+
+async function backfillOpSeq(database: SQLite.SQLiteDatabase): Promise<void> {
+  const deliveries =
+    (await database.getAllAsync<PendingDelivery>(
+      "SELECT * FROM pending_deliveries WHERE opSeq IS NULL",
+    )) ?? [];
+  const undos =
+    (await database.getAllAsync<PendingUndo>(
+      "SELECT * FROM pending_undos WHERE opSeq IS NULL",
+    )) ?? [];
+  const pending = [
+    ...deliveries.map((row) => ({ kind: "delivery" as const, row })),
+    ...undos.map((row) => ({ kind: "undo" as const, row })),
+  ].sort((a, b) => {
+    if (a.row.createdAt !== b.row.createdAt) {
+      return a.row.createdAt < b.row.createdAt ? -1 : 1;
+    }
+    return a.row.id - b.row.id;
+  });
+
+  for (const item of pending) {
+    const seq = await allocateOpSeq(database);
+    const table = item.kind === "delivery" ? "pending_deliveries" : "pending_undos";
+    await database.runAsync(`UPDATE ${table} SET opSeq = ? WHERE id = ?`, [seq, item.row.id]);
+  }
+}
+
 async function getDb(): Promise<SQLite.SQLiteDatabase> {
   if (db) return db;
   db = await SQLite.openDatabaseAsync("cricscore_offline.db");
@@ -58,7 +113,14 @@ async function getDb(): Promise<SQLite.SQLiteDatabase> {
       createdAt TEXT NOT NULL DEFAULT (datetime('now')),
       synced INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS sync_op_seq (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      next INTEGER NOT NULL
+    );
   `);
+  await ensureOpSeqColumn(db, "pending_deliveries");
+  await ensureOpSeqColumn(db, "pending_undos");
+  await backfillOpSeq(db);
   return db;
 }
 
@@ -294,9 +356,10 @@ export async function queueDelivery(
   payload: RecordDeliveryInput,
 ): Promise<void> {
   const database = await getDb();
+  const opSeq = await allocateOpSeq(database);
   await database.runAsync(
-    "INSERT INTO pending_deliveries (matchId, payload, createdAt, synced) VALUES (?, ?, datetime('now'), 0)",
-    [matchId, JSON.stringify(payload)],
+    "INSERT INTO pending_deliveries (matchId, payload, createdAt, synced, opSeq) VALUES (?, ?, ?, 0, ?)",
+    [matchId, JSON.stringify(payload), new Date().toISOString(), opSeq],
   );
 }
 
@@ -323,6 +386,7 @@ interface PendingUndo {
   inningsId: string;
   createdAt: string;
   synced: number;
+  opSeq?: number | null;
 }
 
 /**
@@ -330,48 +394,32 @@ interface PendingUndo {
  */
 export async function queueUndo(matchId: string, inningsId: string): Promise<void> {
   const database = await getDb();
+  const opSeq = await allocateOpSeq(database);
   await database.runAsync(
-    "INSERT INTO pending_undos (matchId, inningsId, createdAt, synced) VALUES (?, ?, datetime('now'), 0)",
-    [matchId, inningsId],
+    "INSERT INTO pending_undos (matchId, inningsId, createdAt, synced, opSeq) VALUES (?, ?, ?, 0, ?)",
+    [matchId, inningsId, new Date().toISOString(), opSeq],
   );
 }
 
-async function syncPendingUndos(matchId?: string): Promise<number> {
-  const database = await getDb();
-  const pending = matchId
-    ? await database.getAllAsync<PendingUndo>(
-        "SELECT * FROM pending_undos WHERE synced = 0 AND matchId = ? ORDER BY id ASC",
-        [matchId],
-      )
-    : await database.getAllAsync<PendingUndo>(
-        "SELECT * FROM pending_undos WHERE synced = 0 ORDER BY id ASC",
-      );
+type ReplayOp =
+  | { kind: "delivery"; row: PendingDelivery }
+  | { kind: "undo"; row: PendingUndo };
 
-  let syncedCount = 0;
-
-  for (const row of pending) {
-    try {
-      await api.undoLastBall(row.matchId, row.inningsId);
-      await database.runAsync("UPDATE pending_undos SET synced = 1 WHERE id = ?", [row.id]);
-      const nextPos = Math.max(0, (await getUndoStackPos(row.matchId)) - 1);
-      await setUndoStackPos(row.matchId, nextPos);
-      syncedCount++;
-    } catch (error) {
-      console.warn("[offline-sync] Failed to sync undo:", row.id, error);
-      break;
-    }
+function compareReplayOps(a: ReplayOp, b: ReplayOp): number {
+  const aSeq = a.row.opSeq ?? null;
+  const bSeq = b.row.opSeq ?? null;
+  if (aSeq != null && bSeq != null && aSeq !== bSeq) return aSeq - bSeq;
+  if (a.row.createdAt !== b.row.createdAt) {
+    return a.row.createdAt < b.row.createdAt ? -1 : 1;
   }
-
-  await database.runAsync(
-    "DELETE FROM pending_undos WHERE synced = 1 AND createdAt < datetime('now', '-1 day')",
-  );
-
-  return syncedCount;
+  if (aSeq != null && bSeq != null) return aSeq - bSeq;
+  return a.row.id - b.row.id;
 }
 
 /**
- * Replay unsynced deliveries to the API in order. Payloads must include
- * client_id and expected_stack_pos for idempotency and conflict detection.
+ * Replay unsynced scoring ops in queue order. An undo of a server ball and
+ * the delivery scored after it share one sequence, so the undo is applied
+ * before the replacement ball's expected_stack_pos is checked.
  */
 export async function syncPendingDeliveries(
   options: {
@@ -380,7 +428,7 @@ export async function syncPendingDeliveries(
   } = {},
 ): Promise<SyncResult> {
   const database = await getDb();
-  const pending = options.matchId
+  const deliveries = options.matchId
     ? await database.getAllAsync<PendingDelivery>(
         "SELECT * FROM pending_deliveries WHERE synced = 0 AND matchId = ? ORDER BY id ASC",
         [options.matchId],
@@ -388,41 +436,67 @@ export async function syncPendingDeliveries(
     : await database.getAllAsync<PendingDelivery>(
         "SELECT * FROM pending_deliveries WHERE synced = 0 ORDER BY id ASC",
       );
+  const undos = options.matchId
+    ? await database.getAllAsync<PendingUndo>(
+        "SELECT * FROM pending_undos WHERE synced = 0 AND matchId = ? ORDER BY id ASC",
+        [options.matchId],
+      )
+    : await database.getAllAsync<PendingUndo>(
+        "SELECT * FROM pending_undos WHERE synced = 0 ORDER BY id ASC",
+      );
+
+  const ops: ReplayOp[] = [
+    ...(deliveries ?? []).map((row) => ({ kind: "delivery" as const, row })),
+    ...(undos ?? []).map((row) => ({ kind: "undo" as const, row })),
+  ].sort(compareReplayOps);
 
   let syncedCount = 0;
 
-  for (const row of pending) {
+  for (const op of ops) {
     try {
-      const payload = JSON.parse(row.payload) as RecordDeliveryInput;
-      const result = await api.recordDelivery(row.matchId, payload);
+      if (op.kind === "delivery") {
+        const payload = JSON.parse(op.row.payload) as RecordDeliveryInput;
+        const result = await api.recordDelivery(op.row.matchId, payload);
 
-      await database.runAsync(
-        "UPDATE pending_deliveries SET synced = 1 WHERE id = ?",
-        [row.id],
-      );
+        await database.runAsync(
+          "UPDATE pending_deliveries SET synced = 1 WHERE id = ?",
+          [op.row.id],
+        );
 
-      const nextPos =
-        result.delivery?.undoStackPos ??
-        ((payload.expected_stack_pos ?? 0) + 1);
-      await setUndoStackPos(row.matchId, nextPos);
+        const nextPos =
+          result.delivery?.undoStackPos ??
+          ((payload.expected_stack_pos ?? 0) + 1);
+        await setUndoStackPos(op.row.matchId, nextPos);
+      } else {
+        await api.undoLastBall(op.row.matchId, op.row.inningsId);
+        await database.runAsync("UPDATE pending_undos SET synced = 1 WHERE id = ?", [
+          op.row.id,
+        ]);
+        const nextPos = Math.max(0, (await getUndoStackPos(op.row.matchId)) - 1);
+        await setUndoStackPos(op.row.matchId, nextPos);
+      }
       syncedCount++;
     } catch (error) {
-      if (error instanceof ApiError && error.status === 409) {
+      if (op.kind === "delivery" && error instanceof ApiError && error.status === 409) {
         const conflict: SyncConflictInfo = {
           message: error.message,
           serverUndoStackPos: extractServerUndoStackPos(error),
-          matchId: row.matchId,
+          matchId: op.row.matchId,
         };
 
         if (conflict.serverUndoStackPos !== undefined) {
-          await setUndoStackPos(row.matchId, conflict.serverUndoStackPos);
+          await setUndoStackPos(op.row.matchId, conflict.serverUndoStackPos);
         }
 
         options.onConflict?.(conflict);
         return { syncedCount, conflict };
       }
 
-      console.warn("[offline-sync] Failed to sync delivery:", row.id, error);
+      console.warn(
+        `[offline-sync] Failed to sync ${op.kind}:`,
+        op.row.id,
+        error,
+      );
       break;
     }
   }
@@ -430,9 +504,9 @@ export async function syncPendingDeliveries(
   await database.runAsync(
     "DELETE FROM pending_deliveries WHERE synced = 1 AND createdAt < datetime('now', '-1 day')",
   );
-
-  const undoSynced = await syncPendingUndos(options.matchId);
-  syncedCount += undoSynced;
+  await database.runAsync(
+    "DELETE FROM pending_undos WHERE synced = 1 AND createdAt < datetime('now', '-1 day')",
+  );
 
   return { syncedCount };
 }
