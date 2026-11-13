@@ -152,7 +152,7 @@ describe('offline-sync queue and counts', () => {
 
     expect(mockDb.runAsync).toHaveBeenCalledWith(
       expect.stringContaining('INSERT INTO pending_deliveries'),
-      ['m1', JSON.stringify(payload)],
+      ['m1', JSON.stringify(payload), expect.any(String), 1],
     );
   });
 
@@ -423,6 +423,62 @@ describe('syncPendingDeliveries', () => {
 
     expect(result.syncedCount).toBe(0);
     expect(mockRecordDelivery).toHaveBeenCalledTimes(1);
+  });
+
+  it('applies an offline undo before the replacement delivery queued after it', async () => {
+    // Undo was queued first (opSeq 1) even though its timestamp is later.
+    // Sending the replacement ball first 409s, because the server still has
+    // the ball the undo was meant to remove, and the conflict return used to
+    // drop the undo entirely.
+    let undone = false;
+    const undo = {
+      id: 1,
+      matchId: 'm1',
+      inningsId: 'inn-1',
+      createdAt: '2026-11-13T11:00:02.000Z',
+      synced: 0,
+      opSeq: 1,
+    };
+    const delivery = {
+      id: 7,
+      matchId: 'm1',
+      payload: JSON.stringify(deliveryPayload({ client_id: 'c-fix', expected_stack_pos: 4 })),
+      createdAt: '2026-11-13T11:00:01.000Z',
+      synced: 0,
+      opSeq: 2,
+    };
+    mockDb.getAllAsync.mockImplementation((sql: string) => {
+      if (sql.includes('opSeq IS NULL') || sql.includes('PRAGMA')) return Promise.resolve([]);
+      if (sql.includes('pending_undos')) return Promise.resolve([undo]);
+      if (sql.includes('pending_deliveries')) return Promise.resolve([delivery]);
+      return Promise.resolve([]);
+    });
+    mockDb.getFirstAsync.mockResolvedValue({ undoStackPos: 5 });
+    mockUndoLastBall.mockImplementation(async () => {
+      undone = true;
+    });
+    mockRecordDelivery.mockImplementation(async () => {
+      if (!undone) {
+        throw new ApiError('Conflict', 409, 'CONFLICT', {
+          server_state: { current_undo_stack_pos: 5 },
+        });
+      }
+      return { delivery: { undoStackPos: 5 } };
+    });
+
+    const { syncPendingDeliveries } = await import('./offline-sync');
+    const result = await syncPendingDeliveries({ matchId: 'm1' });
+
+    expect(result.conflict).toBeUndefined();
+    expect(result.syncedCount).toBe(2);
+    expect(mockUndoLastBall).toHaveBeenCalledWith('m1', 'inn-1');
+    expect(mockRecordDelivery).toHaveBeenCalledWith(
+      'm1',
+      expect.objectContaining({ client_id: 'c-fix', expected_stack_pos: 4 }),
+    );
+    expect(mockUndoLastBall.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRecordDelivery.mock.invocationCallOrder[0],
+    );
   });
 });
 
