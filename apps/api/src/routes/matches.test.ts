@@ -54,7 +54,21 @@ vi.mock('../db/index', () => ({
   },
 }));
 
-import { matchRoutes } from './matches';
+import { matchRoutes, NAMED_MATCH_FORMATS } from './matches';
+
+describe('named match formats', () => {
+  it('creates The Hundred as 20 sets of 5 balls', () => {
+    expect(NAMED_MATCH_FORMATS.hundred).toMatchObject({
+      name: 'The Hundred',
+      oversPerInnings: 20,
+      ballsPerOver: 5,
+      maxBowlerOvers: 4,
+    });
+    expect(NAMED_MATCH_FORMATS.t20.ballsPerOver).toBe(6);
+    expect(NAMED_MATCH_FORMATS.odi.ballsPerOver).toBe(6);
+    expect(NAMED_MATCH_FORMATS.t10.ballsPerOver).toBe(6);
+  });
+});
 
 describe('POST /api/v1/matches/:id/start', () => {
   let app: ReturnType<typeof Fastify>;

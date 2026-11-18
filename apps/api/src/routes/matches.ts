@@ -11,6 +11,27 @@ import { parsePagination, paginatedResponse } from '../middleware/pagination';
 import { cacheGet, cacheSet, invalidateMatchCache } from '../services/cache';
 import { dlsEngine, type DLSInterruption } from '../engine/dls-engine';
 
+// Named formats the clients send instead of a format-config UUID.
+// The Hundred is 20 sets of 5 balls (100). Every other named format is 6-ball.
+export const NAMED_MATCH_FORMATS: Record<string, {
+  name: string;
+  oversPerInnings: number | null;
+  inningsPerSide: number;
+  maxBowlerOvers: number | null;
+  hasSuperOver: boolean;
+  hasDls: boolean;
+  hasFollowOn: boolean;
+  followOnThreshold: number | null;
+  ballsPerOver: number;
+}> = {
+  t20: { name: 'T20', oversPerInnings: 20, inningsPerSide: 1, maxBowlerOvers: 4, hasSuperOver: true, hasDls: true, hasFollowOn: false, followOnThreshold: null, ballsPerOver: 6 },
+  odi: { name: 'ODI', oversPerInnings: 50, inningsPerSide: 1, maxBowlerOvers: 10, hasSuperOver: true, hasDls: true, hasFollowOn: false, followOnThreshold: null, ballsPerOver: 6 },
+  test: { name: 'Test', oversPerInnings: null, inningsPerSide: 2, maxBowlerOvers: null, hasSuperOver: false, hasDls: false, hasFollowOn: true, followOnThreshold: 200, ballsPerOver: 6 },
+  t10: { name: 'T10', oversPerInnings: 10, inningsPerSide: 1, maxBowlerOvers: 2, hasSuperOver: true, hasDls: false, hasFollowOn: false, followOnThreshold: null, ballsPerOver: 6 },
+  hundred: { name: 'The Hundred', oversPerInnings: 20, inningsPerSide: 1, maxBowlerOvers: 4, hasSuperOver: true, hasDls: false, hasFollowOn: false, followOnThreshold: null, ballsPerOver: 5 },
+  custom: { name: 'Custom', oversPerInnings: null, inningsPerSide: 2, maxBowlerOvers: null, hasSuperOver: false, hasDls: false, hasFollowOn: false, followOnThreshold: null, ballsPerOver: 6 },
+};
+
 // Valid match status transitions
 const VALID_STATUS_TRANSITIONS: Record<string, string[]> = {
   created: ['toss_decided'],
@@ -213,17 +234,8 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
     let resolvedFormatConfigId = body.formatConfigId;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(body.formatConfigId);
     if (!isUuid) {
-      const formatDefaults: Record<string, { name: string; oversPerInnings: number | null; inningsPerSide: number; maxBowlerOvers: number | null; hasSuperOver: boolean; hasDls: boolean; hasFollowOn: boolean; followOnThreshold: number | null }> = {
-        t20: { name: 'T20', oversPerInnings: 20, inningsPerSide: 1, maxBowlerOvers: 4, hasSuperOver: true, hasDls: true, hasFollowOn: false, followOnThreshold: null },
-        odi: { name: 'ODI', oversPerInnings: 50, inningsPerSide: 1, maxBowlerOvers: 10, hasSuperOver: true, hasDls: true, hasFollowOn: false, followOnThreshold: null },
-        test: { name: 'Test', oversPerInnings: null, inningsPerSide: 2, maxBowlerOvers: null, hasSuperOver: false, hasDls: false, hasFollowOn: true, followOnThreshold: 200 },
-        t10: { name: 'T10', oversPerInnings: 10, inningsPerSide: 1, maxBowlerOvers: 2, hasSuperOver: true, hasDls: false, hasFollowOn: false, followOnThreshold: null },
-        hundred: { name: 'The Hundred', oversPerInnings: 20, inningsPerSide: 1, maxBowlerOvers: 4, hasSuperOver: true, hasDls: false, hasFollowOn: false, followOnThreshold: null },
-        custom: { name: 'Custom', oversPerInnings: null, inningsPerSide: 2, maxBowlerOvers: null, hasSuperOver: false, hasDls: false, hasFollowOn: false, followOnThreshold: null },
-      };
-
       const formatKey = body.formatConfigId.toLowerCase();
-      const defaults = formatDefaults[formatKey];
+      const defaults = NAMED_MATCH_FORMATS[formatKey];
       const formatName = defaults?.name || body.formatConfigId;
 
       // Look up existing config by name
@@ -233,6 +245,13 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
 
       if (existing) {
         resolvedFormatConfigId = existing.id;
+        // The first Hundred match used to persist 6 balls per over. Later
+        // matches reuse that row, so correct it back to 5 before scoring.
+        if (formatKey === 'hundred' && existing.ballsPerOver !== defaults.ballsPerOver) {
+          await db.update(matchFormatConfig).set({
+            ballsPerOver: defaults.ballsPerOver,
+          }).where(eq(matchFormatConfig.id, existing.id));
+        }
       } else if (defaults) {
         const [created] = await db.insert(matchFormatConfig).values({
           name: defaults.name,
@@ -243,7 +262,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
           hasDls: defaults.hasDls,
           hasFollowOn: defaults.hasFollowOn,
           followOnThreshold: defaults.followOnThreshold,
-          ballsPerOver: 6,
+          ballsPerOver: defaults.ballsPerOver,
         }).returning();
         resolvedFormatConfigId = created.id;
       } else {

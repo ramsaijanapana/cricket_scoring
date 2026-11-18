@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveStrikerRotation,
   checkInningsCompletion,
+  advanceBowlerOvers,
+  bowlerEconomyRate,
   scoringEngine,
 } from './scoring-engine';
 
@@ -39,6 +41,37 @@ function computeOverString(completedOvers: number, ballsInCurrentOver: number): 
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────
+
+describe('ScoringEngine — bowling overs follow the format length', () => {
+  it('rolls a six-ball over on the sixth legal ball', () => {
+    let overs = '0.0';
+    for (let ball = 0; ball < 5; ball++) overs = advanceBowlerOvers(overs, 6);
+    expect(overs).toBe('0.5');
+    expect(advanceBowlerOvers(overs, 6)).toBe('1.0');
+    expect(advanceBowlerOvers('1.0', 6)).toBe('1.1');
+  });
+
+  it('rolls a Hundred set on the fifth legal ball and keeps the next ball', () => {
+    // 5-ball overs used to roll at 6, so the fifth ball stayed "0.5" and the
+    // first ball of the next set was swallowed into "1.0".
+    let overs = '0.0';
+    for (let ball = 0; ball < 4; ball++) overs = advanceBowlerOvers(overs, 5);
+    expect(overs).toBe('0.4');
+    expect(advanceBowlerOvers(overs, 5)).toBe('1.0');
+    expect(advanceBowlerOvers('1.0', 5)).toBe('1.1');
+  });
+
+  it('counts a five-ball over as one over in the economy', () => {
+    expect(bowlerEconomyRate(10, '1.0', 5)).toBe('10.00');
+    expect(bowlerEconomyRate(5, '0.1', 5)).toBe('25.00');
+    expect(bowlerEconomyRate(5, '0.1', 6)).toBe('30.00');
+  });
+
+  it('ends a Hundred innings after 20 sets, which is 100 balls', () => {
+    expect(checkInningsCompletion(0, 19, 20, 80, null)).toBe(false);
+    expect(checkInningsCompletion(0, 20, 20, 80, null)).toBe(true);
+  });
+});
 
 describe('ScoringEngine — Legal Delivery Classification', () => {
   it('normal delivery is legal', () => {
