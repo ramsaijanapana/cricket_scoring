@@ -92,6 +92,28 @@ export function resolveStrikerRotation(
   return { newStrikerId: newStriker, newNonStrikerId: newNonStriker };
 }
 
+/** Next bowling-analysis overs string after one legal ball. Rolls at ballsPerOver, not a fixed 6. */
+export function advanceBowlerOvers(oversBowled: string, ballsPerOver: number): string {
+  const parts = String(oversBowled).split('.');
+  const completedOvers = parseInt(parts[0], 10) || 0;
+  const currentBalls = parseInt(parts[1], 10) || 0;
+  const totalBalls = currentBalls + 1;
+  if (totalBalls >= ballsPerOver) {
+    return `${completedOvers + 1}.0`;
+  }
+  return `${completedOvers}.${totalBalls}`;
+}
+
+/** Runs per over. A five-ball over and a six-ball over are both one over. */
+export function bowlerEconomyRate(runsConceded: number, oversBowled: string, ballsPerOver: number): string {
+  const parts = String(oversBowled).split('.');
+  const oversWhole = parseInt(parts[0], 10) || 0;
+  const oversBalls = parseInt(parts[1], 10) || 0;
+  const totalBallsBowled = oversWhole * ballsPerOver + oversBalls;
+  if (totalBallsBowled <= 0) return '0.00';
+  return ((runsConceded / totalBallsBowled) * ballsPerOver).toFixed(2);
+}
+
 export function checkInningsCompletion(
   wickets: number, completedOverNumber: number | null,
   maxOvers: number | null, runs: number, target: number | null,
@@ -369,7 +391,9 @@ export class ScoringEngine {
 
       // Update scorecards
       await this.updateBattingScorecard(input, context.inningsId, isLegal, tx);
-      await this.updateBowlingScorecard(input, context.inningsId, totalRuns, isLegal, tx);
+      await this.updateBowlingScorecard(
+        input, context.inningsId, totalRuns, isLegal, context.formatConfig.ballsPerOver, tx,
+      );
 
       if (input.isWicket && input.fielderIds?.length) {
         await this.updateFieldingScorecard(input, context.inningsId, tx);
@@ -976,7 +1000,8 @@ export class ScoringEngine {
   }
 
   private async updateBowlingScorecard(
-    input: DeliveryInput, inningsId: string, totalRuns: number, isLegal: boolean, tx: TxOrDb = db,
+    input: DeliveryInput, inningsId: string, totalRuns: number, isLegal: boolean,
+    ballsPerOver: number, tx: TxOrDb = db,
   ) {
     const existing = await tx.query.bowlingScorecard.findFirst({
       where: and(
@@ -988,28 +1013,14 @@ export class ScoringEngine {
     if (existing) {
       const isBowlerWicket = input.isWicket && this.isBowlerWicket(input.wicketType);
 
-      // Calculate updated oversBowled (e.g., "2.3" = 2 overs and 3 balls)
-      // Use string splitting to avoid floating-point precision issues
+      // "2.3" = 2 overs and 3 balls. The roll point is the format's balls per over.
       let newOversBowled = existing.oversBowled;
       if (isLegal) {
-        const parts = String(existing.oversBowled).split('.');
-        const completedOvers = parseInt(parts[0], 10) || 0;
-        const currentBalls = parseInt(parts[1], 10) || 0;
-        const totalBalls = currentBalls + 1;
-        if (totalBalls >= 6) {
-          newOversBowled = `${completedOvers + 1}.0`;
-        } else {
-          newOversBowled = `${completedOvers}.${totalBalls}`;
-        }
+        newOversBowled = advanceBowlerOvers(String(existing.oversBowled), ballsPerOver);
       }
 
-      // Calculate economy rate
       const newRuns = existing.runsConceded + totalRuns;
-      const oversParts = String(newOversBowled).split('.');
-      const oversWhole = parseInt(oversParts[0], 10) || 0;
-      const oversBalls = parseInt(oversParts[1], 10) || 0;
-      const totalBallsBowled = oversWhole * 6 + oversBalls;
-      const economyRate = totalBallsBowled > 0 ? ((newRuns / totalBallsBowled) * 6).toFixed(2) : '0.00';
+      const economyRate = bowlerEconomyRate(newRuns, String(newOversBowled), ballsPerOver);
 
       await tx.update(bowlingScorecard).set({
         oversBowled: newOversBowled,
@@ -1028,9 +1039,8 @@ export class ScoringEngine {
       const inningsData = await tx.query.innings.findFirst({
         where: eq(innings.id, inningsId),
       });
-      const legalBall = isLegal ? 1 : 0;
-      const oversStr = legalBall > 0 ? '0.1' : '0.0';
-      const econ = legalBall > 0 ? (totalRuns * 6).toFixed(2) : '0.00';
+      const oversStr = isLegal ? advanceBowlerOvers('0.0', ballsPerOver) : '0.0';
+      const econ = bowlerEconomyRate(totalRuns, oversStr, ballsPerOver);
 
       await tx.insert(bowlingScorecard).values({
         inningsId,
