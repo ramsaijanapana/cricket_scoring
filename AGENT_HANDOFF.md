@@ -4,9 +4,9 @@
 
 ## Current State
 
-- Updated: 2026-11-18T11:12:46.127Z
+- Updated: 2026-11-18T11:13:58.451Z
 - Branch: cursor/critical-bug-identification-5d1a
-- Head: dadd810
+- Head: e647910
 - Focus: Hundred balls-per-over
 
 ## Latest Summary
@@ -31,14 +31,18 @@
 
 ## Working Tree Snapshot
 
-- Changed files: 4
+- Changed files: 0
 - Staged files: 0
-- apps/api/src/engine/scoring-engine.test.ts
-- apps/api/src/engine/scoring-engine.ts
-- apps/api/src/routes/matches.test.ts
-- apps/api/src/routes/matches.ts
+- No working tree changes detected.
 
 ## Recent Checkpoints
+
+### 2026-11-18T11:13:58.451Z — Hundred balls-per-over
+
+- Actor: ubuntu
+- Summary: The Hundred matches are 20 sets of 5 balls, and bowling figures roll at that length.
+- Next: Review the Hundred format fix.
+- Verified: apps/api vitest scoring-engine.test.ts and matches.test.ts: 107 passed
 
 ### 2026-11-18T11:12:46.127Z — Hundred balls-per-over
 
@@ -67,13 +71,6 @@
 - Summary: P3 a11y: @axe-core/playwright e2e for Home/Login/Scoring; Layout/NotificationBell/ScoringPage modal+keyboard fixes; contrast tokens; CommentaryEditor syntax fix
 - Next: Continue P3 sprint or wire a11y into CI
 - Verified: Playwright 12/12; web vitest 82/82
-
-### 2026-06-22T15:16:26.155Z — P3 mobile polish
-
-- Actor: test
-- Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
-- Next: Continue P3 sprint agents; commit when ready
-- Verified: apps/mobile tsc clean; npm test 56/56
 
 ## Workflow Rule
 
