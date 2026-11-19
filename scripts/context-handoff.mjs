@@ -453,11 +453,13 @@ function isIgnoredContextFile(file) {
 
 function getGitOutput(command) {
   try {
+    // Keep a leading space. `git status --short` uses it for the first
+    // column, and String.trim() would drop that space on the first line.
     return execSync(command, {
       cwd: REPO_ROOT,
       stdio: ["ignore", "pipe", "ignore"],
       encoding: "utf8",
-    }).trim();
+    }).replace(/\s+$/u, "");
   } catch {
     return "";
   }

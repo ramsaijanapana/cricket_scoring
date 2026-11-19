@@ -4,22 +4,22 @@
 
 ## Current State
 
-- Updated: 2026-06-22T15:28:24.481Z
-- Branch: main
-- Head: 90b56dd
-- Focus: P3 live commentary
+- Updated: 2026-11-19T11:13:18.567Z
+- Branch: cursor/critical-bug-inspection-735b
+- Head: dadd810
+- Focus: Live scoring chase handoff
 
 ## Latest Summary
 
-- P3 A++ sprint: shared UI kit, scoring refactor, match cache, API route tests, mobile offline/haptics tests, CI smoke/a11y, docs/metrics
+- Start Next Innings now creates the chase, and scoring writes drop the cached match detail.
 
 ## Next Steps
 
-- Monitor CI on main after push
+- Review the chase-target and delivery-cache changes.
 
 ## Risks / Watchouts
 
-- Interactive PowerShell may still fail on machines where npm.ps1 is blocked by execution policy even though npm works in non-interactive runners.
+- A second innings is rejected with 409 while another innings is still in progress.
 
 ## Decisions
 
@@ -27,35 +27,38 @@
 
 ## Verification
 
-- npm test: 309 passed (api 171, web 82, mobile 56)
+- api vitest chase-target.test.ts and deliveries.integration.test.ts; web vitest next-innings.test.ts
 
 ## Working Tree Snapshot
 
-- Changed files: 136
+- Changed files: 10
 - Staged files: 0
-- agent-context/state.json
-- .env.example
-- .github/workflows/ci.yml
-- .github/workflows/deploy.yml
-- README.md
-- apps/api/.env.example
-- apps/api/src/config.ts
-- apps/api/src/db/index.ts
-- apps/api/src/middleware/metrics.ts
-- apps/api/src/middleware/pagination.ts
-- apps/api/src/routes/analytics.ts
-- apps/api/src/routes/commentary.ts
-- apps/api/src/server.ts
-- apps/api/src/services/notification-service.ts
-- apps/api/src/services/scoring-orchestrator.ts
-- apps/api/src/services/sentry.ts
-- apps/api/src/workers/notification-worker.ts
-- apps/mobile/app.json
-- apps/mobile/app/(tabs)/_layout.tsx
-- apps/mobile/app/(tabs)/chat.tsx
-- +116 more changed files
+- apps/api/src/routes/deliveries.integration.test.ts
+- apps/api/src/routes/deliveries.ts
+- apps/api/src/routes/innings.ts
+- apps/web/src/lib/api.ts
+- apps/web/src/pages/ScoringPage.tsx
+- scripts/context-handoff.mjs
+- apps/api/src/engine/chase-target.test.ts
+- apps/api/src/engine/chase-target.ts
+- apps/web/src/pages/scoring/next-innings.test.ts
+- apps/web/src/pages/scoring/next-innings.ts
 
 ## Recent Checkpoints
+
+### 2026-11-19T11:13:18.567Z — Live scoring chase handoff
+
+- Actor: ubuntu
+- Summary: Start Next Innings now creates the chase, and scoring writes drop the cached match detail.
+- Next: Review the chase-target and delivery-cache changes.
+- Verified: api vitest chase-target.test.ts and deliveries.integration.test.ts; web vitest next-innings.test.ts
+
+### 2026-11-19T11:12:05.225Z — Live scoring chase handoff
+
+- Actor: ubuntu
+- Summary: Start Next Innings now creates the chase, and scoring writes drop the cached match detail.
+- Next: Review the chase-target and delivery-cache changes.
+- Verified: api vitest chase-target.test.ts and deliveries.integration.test.ts; web vitest next-innings.test.ts
 
 ### 2026-06-22T15:28:24.481Z — P3 live commentary
 
@@ -77,20 +80,6 @@
 - Summary: P3 a11y: @axe-core/playwright e2e for Home/Login/Scoring; Layout/NotificationBell/ScoringPage modal+keyboard fixes; contrast tokens; CommentaryEditor syntax fix
 - Next: Continue P3 sprint or wire a11y into CI
 - Verified: Playwright 12/12; web vitest 82/82
-
-### 2026-06-22T15:16:26.155Z — P3 mobile polish
-
-- Actor: test
-- Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
-- Next: Continue P3 sprint agents; commit when ready
-- Verified: apps/mobile tsc clean; npm test 56/56
-
-### 2026-06-22T15:15:59.189Z — P3 contract unification
-
-- Actor: test
-- Summary: P3 contract unification: shared dtos.ts (MatchDetail, Paginated, RecordDeliveryInput, ScorecardSnapshot, RecordDeliveryResult); normalized WS events to snake_case + WS_EVENTS; web/mobile/api migrated off local scoring DTOs
-- Next: Other P3 agents; fix mobile haptics.test.ts parse error (unrelated)
-- Verified: shared build OK; api 171/171; web 82/82; mobile contract tests 40/40; root npm test blocked by haptics.test.ts syntax
 
 ## Workflow Rule
 

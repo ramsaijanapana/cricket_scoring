@@ -29,8 +29,14 @@ vi.mock('../services/scoring-orchestrator', () => ({
   orchestrateDeliveryUndone: vi.fn(),
 }));
 
+vi.mock('../services/cache', () => ({
+  invalidateMatchCache: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { db } from '../db/index';
 import { scoringEngine } from '../engine/scoring-engine';
 import { orchestrateDeliveryRecorded } from '../services/scoring-orchestrator';
+import { invalidateMatchCache } from '../services/cache';
 import { deliveryRoutes } from './deliveries';
 
 const MATCH_ID = '11111111-1111-4111-8111-111111111111';
@@ -128,5 +134,35 @@ describe('POST /api/v1/matches/:id/deliveries', () => {
     expect(body.error.details.non_striker_id).toBeDefined();
     expect(scoringEngine.recordDelivery).not.toHaveBeenCalled();
     expect(orchestrateDeliveryRecorded).not.toHaveBeenCalled();
+  });
+
+  it('drops the cached match detail after a ball is stored', async () => {
+    vi.mocked(db.query.innings.findFirst).mockResolvedValue({
+      status: 'in_progress',
+      totalRuns: 10,
+      totalWickets: 1,
+      targetScore: null,
+    } as never);
+    vi.mocked(scoringEngine.recordDelivery).mockResolvedValue({
+      delivery: { id: 'ball-1' },
+      commentary: null,
+      overCompleted: false,
+      inningsCompleted: false,
+      matchCompleted: false,
+      newStrikerId: 'striker',
+      newNonStrikerId: 'non-striker',
+      scorecardSnapshot: {},
+    } as never);
+
+    const token = signToken(['scorer']);
+    const res = await app.inject({
+      method: 'POST',
+      url: POST_URL,
+      headers: { authorization: `Bearer ${token}` },
+      payload: validDeliveryBody,
+    });
+
+    expect(res.statusCode).toBe(201);
+    expect(invalidateMatchCache).toHaveBeenCalledWith(MATCH_ID);
   });
 });
