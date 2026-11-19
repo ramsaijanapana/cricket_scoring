@@ -18,6 +18,7 @@ import { MatchBreakScreen } from '../components/MatchBreakScreen';
 import { SpectatorBadge } from '../components/SpectatorBadge';
 import { LivePredictionChart } from '../components/charts/LivePredictionChart';
 import { useDocumentTitle, matchDocumentTitle } from '../hooks/useDocumentTitle';
+import { buildNextInningsBody } from './scoring/next-innings';
 
 type ExtrasMode = 'normal' | 'wide' | 'noball' | 'bye' | 'legbye' | 'penalty';
 
@@ -135,6 +136,7 @@ export function ScoringPage() {
 
   const [extrasMode, setExtrasMode] = useState<ExtrasMode>('normal');
   const [showWicketModal, setShowWicketModal] = useState(false);
+  const [startingInnings, setStartingInnings] = useState(false);
   const [wicketDismissalType, setWicketDismissalType] = useState<string | null>(null);
   const [wicketRunOutRuns, setWicketRunOutRuns] = useState(0);
   const [runOutDismissedId, setRunOutDismissedId] = useState<string | null>(null);
@@ -338,6 +340,41 @@ export function ScoringPage() {
       setToastVisible(true);
     },
   });
+
+  const startNextInnings = useCallback(async () => {
+    if (!matchId || !matchData || startingInnings) return;
+    const built = buildNextInningsBody({
+      innings: matchData.innings || [],
+      teams: matchData.teams || [],
+    });
+    if (!built.ok) {
+      setToastMessage(built.reason);
+      setToastVisible(true);
+      return;
+    }
+
+    setStartingInnings(true);
+    try {
+      await api.createInnings(matchId, built.body);
+      setCurrentStrikerId(null);
+      setCurrentNonStrikerId(null);
+      setCurrentBowlerId(null);
+      setIsFreeHit(false);
+      setLastOverBowlerId(null);
+      setPendingBowlerChange(false);
+      setShowBowlerSelect(false);
+      useScoringStore.getState().clearRecentBalls();
+      setInningsCompleted(false);
+      setCompletionInfo(null);
+      setBreakStatus(null);
+      await queryClient.invalidateQueries({ queryKey: ['match', matchId] });
+    } catch (error) {
+      setToastMessage(`Could not start the next innings: ${(error as Error).message}`);
+      setToastVisible(true);
+    } finally {
+      setStartingInnings(false);
+    }
+  }, [matchId, matchData, startingInnings, queryClient, setBreakStatus]);
 
   // Undo
   const undoMutation = useMutation({
@@ -1220,18 +1257,14 @@ export function ScoringPage() {
           {showLocalInningsBreakAction && (
             <div className="fixed bottom-8 left-1/2 z-[60] -translate-x-1/2 w-full max-w-md px-4">
               <motion.button
-                onClick={() => {
-                  setInningsCompleted(false);
-                  setCompletionInfo(null);
-                  setBreakStatus(null);
-                  queryClient.invalidateQueries({ queryKey: ['match', matchId] });
-                }}
-                whileTap={reduceMotion ? undefined : { scale: 0.95 }}
+                onClick={() => { void startNextInnings(); }}
+                disabled={startingInnings}
+                whileTap={reduceMotion || startingInnings ? undefined : { scale: 0.95 }}
                 className="w-full py-3 rounded-2xl bg-cricket-green/90 text-white
                   border border-cricket-green font-bold text-sm shadow-lg
-                  hover:bg-cricket-green transition-colors"
+                  hover:bg-cricket-green transition-colors disabled:opacity-60"
               >
-                Start Next Innings
+                {startingInnings ? 'Starting…' : 'Start Next Innings'}
               </motion.button>
             </div>
           )}

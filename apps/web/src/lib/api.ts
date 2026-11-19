@@ -371,7 +371,13 @@ export const api = {
     }),
 
   // Innings
-  createInnings: (matchId: string, data: Partial<Innings>) =>
+  createInnings: (matchId: string, data: {
+    battingTeamId: string;
+    bowlingTeamId: string;
+    battingOrder: string[];
+    isSuperOver?: boolean;
+    targetScore?: number | null;
+  }) =>
     request<Innings>(`/matches/${matchId}/innings`, { method: 'POST', body: JSON.stringify(data) }),
   declareInnings: (matchId: string, inningsId: string) =>
     request<Innings>(`/matches/${matchId}/innings/${inningsId}/declare`, { method: 'POST' }),

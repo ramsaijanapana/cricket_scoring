@@ -4,6 +4,8 @@ import { innings, match, matchTeam, matchFormatConfig, delivery } from '../db/sc
 import { battingScorecard, bowlingScorecard, fieldingScorecard } from '../db/schema/scorecard';
 import { eq, and, desc } from 'drizzle-orm';
 import { requireAuth } from '../middleware/auth';
+import { invalidateMatchCache } from '../services/cache';
+import { resolveChaseTarget } from '../engine/chase-target';
 
 export const inningsRoutes: FastifyPluginAsync = async (app) => {
   // Create new innings (for 2nd innings, super over, etc.)
@@ -22,47 +24,83 @@ export const inningsRoutes: FastifyPluginAsync = async (app) => {
     });
     if (!matchData) return reply.status(404).send({ error: 'Match not found' });
 
+    if (!req.body.battingOrder || req.body.battingOrder.length < 2) {
+      return reply.status(400).send({
+        error: { code: 'VALIDATION_ERROR', message: 'At least two batsmen are required to start an innings' },
+      });
+    }
+
     // Get next innings number
     const existingInnings = await db.query.innings.findMany({
       where: eq(innings.matchId, req.params.id),
     });
+    if (existingInnings.some((inningsRow) => inningsRow.status === 'in_progress')) {
+      return reply.status(409).send({
+        error: { code: 'INNINGS_IN_PROGRESS', message: 'An innings is already in progress' },
+      });
+    }
     const nextNumber = existingInnings.length + 1;
 
-    const [newInnings] = await db.insert(innings).values({
-      matchId: req.params.id,
-      inningsNumber: nextNumber,
-      battingTeamId: req.body.battingTeamId,
-      bowlingTeamId: req.body.bowlingTeamId,
-      isSuperOver: req.body.isSuperOver ?? false,
-      targetScore: req.body.targetScore ?? null,
-      status: 'in_progress',
-      startedAt: new Date(),
-    }).returning();
-
-    // Initialize batting scorecards
-    const entries = req.body.battingOrder.map((playerId, idx) => ({
-      inningsId: newInnings.id,
-      playerId,
-      teamId: req.body.battingTeamId,
-      battingPosition: idx + 1,
-      didNotBat: idx >= 2,
-    }));
-    await db.insert(battingScorecard).values(entries);
-
-    // Initialize fielding scorecards for bowling team
-    const bowlingTeamMatch = await db.query.matchTeam.findFirst({
-      where: eq(matchTeam.teamId, req.body.bowlingTeamId),
+    const formatConfig = await db.query.matchFormatConfig.findFirst({
+      where: eq(matchFormatConfig.id, matchData.formatConfigId),
     });
-    if (bowlingTeamMatch?.playingXi) {
-      const fieldingEntries = bowlingTeamMatch.playingXi
-        .filter((id): id is string => id !== null)
-        .map(playerId => ({
-          inningsId: newInnings.id,
+    const firstInnings = existingInnings.find((inningsRow) => inningsRow.inningsNumber === 1);
+    const officials = (matchData.matchOfficials ?? {}) as { dlsState?: { revisedTarget?: number } };
+    const revisedTarget = officials.dlsState?.revisedTarget;
+    const targetScore = resolveChaseTarget({
+      nextInningsNumber: nextNumber,
+      inningsPerSide: formatConfig?.inningsPerSide ?? 0,
+      requestedTarget: req.body.targetScore,
+      firstInningsRuns: firstInnings?.status === 'completed' ? firstInnings.totalRuns : null,
+      revisedTarget: typeof revisedTarget === 'number' ? revisedTarget : null,
+    });
+
+    const bowlingSide = await db.query.matchTeam.findFirst({
+      where: and(
+        eq(matchTeam.matchId, req.params.id),
+        eq(matchTeam.teamId, req.body.bowlingTeamId),
+      ),
+    });
+    const bowlingXi = (bowlingSide?.playingXi || []).filter((id): id is string => id !== null);
+
+    const newInnings = await db.transaction(async (tx) => {
+      const [created] = await tx.insert(innings).values({
+        matchId: req.params.id,
+        inningsNumber: nextNumber,
+        battingTeamId: req.body.battingTeamId,
+        bowlingTeamId: req.body.bowlingTeamId,
+        isSuperOver: req.body.isSuperOver ?? false,
+        targetScore,
+        status: 'in_progress',
+        startedAt: new Date(),
+      }).returning();
+
+      await tx.insert(battingScorecard).values(req.body.battingOrder.map((playerId, idx) => ({
+        inningsId: created.id,
+        playerId,
+        teamId: req.body.battingTeamId,
+        battingPosition: idx + 1,
+        didNotBat: idx >= 2,
+      })));
+
+      if (bowlingXi.length > 0) {
+        await tx.insert(fieldingScorecard).values(bowlingXi.map((playerId) => ({
+          inningsId: created.id,
           playerId,
           teamId: req.body.bowlingTeamId,
-        }));
-      await db.insert(fieldingScorecard).values(fieldingEntries);
-    }
+        })));
+        await tx.insert(bowlingScorecard).values(bowlingXi.map((playerId, idx) => ({
+          inningsId: created.id,
+          playerId,
+          teamId: req.body.bowlingTeamId,
+          bowlingPosition: idx + 1,
+        })));
+      }
+
+      return created;
+    });
+
+    await invalidateMatchCache(req.params.id);
 
     return reply.status(201).send(newInnings);
   });
