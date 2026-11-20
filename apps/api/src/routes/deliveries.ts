@@ -51,7 +51,9 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       });
     }
 
-    // Sync conflict detection (context.md section 5.10) — check undo_stack_pos if provided
+    // Sync conflict detection (context.md section 5.10).
+    // expected_stack_pos is the latest delivery in the whole match. The
+    // engine allocates the next position from that same match-wide sequence.
     if (req.body.expected_stack_pos !== undefined) {
       const latestDelivery = await db.query.delivery.findFirst({
         where: and(eq(delivery.matchId, req.params.id), eq(delivery.isOverridden, false)),

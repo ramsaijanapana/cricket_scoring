@@ -129,4 +129,60 @@ describe('POST /api/v1/matches/:id/deliveries', () => {
     expect(scoringEngine.recordDelivery).not.toHaveBeenCalled();
     expect(orchestrateDeliveryRecorded).not.toHaveBeenCalled();
   });
+
+  it('rejects a chase ball that restarted the undo stack, and accepts the match sequence', async () => {
+    const { db } = await import('../db/index');
+    const token = signToken(['scorer']);
+    const inProgress = {
+      id: '55555555-5555-4555-8555-555555555555',
+      status: 'in_progress',
+      totalRuns: 0,
+      totalWickets: 0,
+      targetScore: 121,
+    };
+    vi.mocked(db.query.innings.findFirst).mockResolvedValue(inProgress as any);
+    vi.mocked(db.query.delivery.findFirst).mockResolvedValue({
+      id: '66666666-6666-4666-8666-666666666666',
+      undoStackPos: 40,
+    } as any);
+
+    const restarted = await app.inject({
+      method: 'POST',
+      url: POST_URL,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { ...validDeliveryBody, expected_stack_pos: 1 },
+    });
+
+    expect(restarted.statusCode).toBe(409);
+    expect(JSON.parse(restarted.body).error.code).toBe('SYNC_CONFLICT');
+    expect(scoringEngine.recordDelivery).not.toHaveBeenCalled();
+
+    vi.mocked(scoringEngine.recordDelivery).mockResolvedValue({
+      delivery: { id: '77777777-7777-4777-8777-777777777777', undoStackPos: 41 },
+      commentary: null,
+      overCompleted: false,
+      inningsCompleted: false,
+      matchCompleted: false,
+      newStrikerId: validDeliveryBody.striker_id,
+      newNonStrikerId: validDeliveryBody.non_striker_id,
+      scorecardSnapshot: {
+        innings_score: 1,
+        innings_wickets: 0,
+        innings_overs: '0.1',
+        run_rate: 6,
+        powerplay: null,
+      },
+      dlsParScore: null,
+    } as any);
+
+    const continued = await app.inject({
+      method: 'POST',
+      url: POST_URL,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { ...validDeliveryBody, expected_stack_pos: 40 },
+    });
+
+    expect(continued.statusCode).toBe(201);
+    expect(scoringEngine.recordDelivery).toHaveBeenCalledTimes(1);
+  });
 });

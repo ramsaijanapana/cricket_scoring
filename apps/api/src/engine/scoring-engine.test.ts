@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveStrikerRotation,
   checkInningsCompletion,
+  allocateUndoStackPos,
+  undoStackLookup,
   scoringEngine,
 } from './scoring-engine';
 
@@ -680,6 +682,41 @@ describe('ScoringEngine — Bonus Points Calculation', () => {
 
   it('below thresholds: 0 bonus', () => {
     expect(scoringEngine.calculateBonusPoints(199, 2, 'first_class')).toEqual({ battingBonus: 0, bowlingBonus: 0 });
+  });
+});
+
+function columnNames(sql: { queryChunks: readonly unknown[] }): string[] {
+  return sql.queryChunks.flatMap((chunk) => {
+    if (chunk && typeof chunk === 'object' && 'name' in chunk && typeof chunk.name === 'string') {
+      return [chunk.name];
+    }
+    return [];
+  });
+}
+
+describe('ScoringEngine — undo stack allocation', () => {
+  it('continues the match sequence so the second innings does not restart at 1', () => {
+    // The first innings ended on stack 40. Mobile sends that as
+    // expected_stack_pos and then stores whatever position the new ball
+    // is given. A chase that restarts at 1 is accepted once, then the
+    // next ball conflicts with the first innings' position.
+    expect(allocateUndoStackPos(40)).toBe(41);
+  });
+
+  it('starts a match with no deliveries at 1', () => {
+    expect(allocateUndoStackPos(null)).toBe(1);
+    expect(allocateUndoStackPos(undefined)).toBe(1);
+    expect(allocateUndoStackPos(0)).toBe(1);
+  });
+
+  it('reads that sequence from the match, not the innings', () => {
+    const lookup = undoStackLookup('11111111-1111-4111-8111-111111111111');
+    const whereNames = columnNames(lookup.where);
+    const orderNames = lookup.orderBy.flatMap(columnNames);
+
+    expect(whereNames).toContain('match_id');
+    expect(whereNames).not.toContain('innings_id');
+    expect(orderNames).toContain('undo_stack_pos');
   });
 });
 

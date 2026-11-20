@@ -104,6 +104,24 @@ export function checkInningsCompletion(
 }
 
 /**
+ * Next event-source position. One sequence per match, including undone rows.
+ * The delivery route's conflict check and the mobile scorer both follow the
+ * latest delivery in the match. Restarting at 1 for a new innings makes the
+ * client adopt that 1, then the next ball fails the match-wide check.
+ */
+export function allocateUndoStackPos(highestExisting: number | null | undefined): number {
+  return (highestExisting ?? 0) + 1;
+}
+
+/** Latest delivery used to allocate the next stack position. Match-scoped. */
+export function undoStackLookup(matchId: string) {
+  return {
+    where: eq(delivery.matchId, matchId),
+    orderBy: [desc(delivery.undoStackPos)],
+  };
+}
+
+/**
  * Scoring Engine — core ball-by-ball logic.
  *
  * Per context.md section 13:
@@ -126,7 +144,7 @@ export class ScoringEngine {
 
       // Dead ball: record for audit trail but don't count anything
       if (input.isDeadBall) {
-        const nextUndoStackPos = context.undoStackPos + 1;
+        const nextUndoStackPos = allocateUndoStackPos(context.undoStackPos);
         const activeOver = context.currentOver;
         if (!activeOver) {
           throw new Error('VALIDATION_ERROR: No active over for dead ball recording');
@@ -287,7 +305,7 @@ export class ScoringEngine {
       const totalBallsBowled = oversCompleted * ballsPerOver + ballsInCurrentOver;
       const currentRunRate = totalBallsBowled > 0 ? (newInningsScore / totalBallsBowled) * ballsPerOver : 0;
 
-      const nextUndoStackPos = context.undoStackPos + 1;
+      const nextUndoStackPos = allocateUndoStackPos(context.undoStackPos);
 
       // Insert immutable delivery record
       const [newDelivery] = await tx.insert(delivery).values({
@@ -795,7 +813,7 @@ export class ScoringEngine {
 
       // Create corrected record pointing back to original
       const context = await this.getContext(original.matchId, original.overNum, tx); // simplified
-      const nextUndoStackPos = context.undoStackPos + 1;
+      const nextUndoStackPos = allocateUndoStackPos(context.undoStackPos);
 
       const [corrected] = await tx.insert(delivery).values({
         ...original,
@@ -858,11 +876,8 @@ export class ScoringEngine {
       orderBy: [desc(over.overNumber)],
     });
 
-    // Get highest undo_stack_pos for this innings
-    const latestDelivery = await tx.query.delivery.findFirst({
-      where: eq(delivery.inningsId, inningsData.id),
-      orderBy: [desc(delivery.undoStackPos)],
-    });
+    // Highest undo_stack_pos in the match, not this innings. See allocateUndoStackPos.
+    const latestDelivery = await tx.query.delivery.findFirst(undoStackLookup(matchId));
 
     return {
       matchId,
