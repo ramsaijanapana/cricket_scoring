@@ -44,7 +44,7 @@ export const deliveryInputSchema = z.object({
   extra_type: z.enum(['wide', 'noball', 'bye', 'legbye', 'penalty']).nullable().default(null),
   is_wicket: z.boolean().default(false),
   wicket_type: z.enum([
-    'bowled', 'caught', 'lbw', 'run_out', 'stumped',
+    'bowled', 'caught', 'caught_and_bowled', 'lbw', 'run_out', 'stumped',
     'hit_wicket', 'obstructing', 'timed_out', 'handled_ball', 'retired_hurt',
   ]).nullable().default(null),
   dismissed_player_id: z.string().uuid().nullable().default(null),
