@@ -104,6 +104,14 @@ export function checkInningsCompletion(
 }
 
 /**
+ * Retired hurt takes the batter off, but it is not a wicket. Counting it
+ * makes the innings all out while a batter is still to come.
+ */
+export function countsAsInningsWicket(isWicket: boolean, wicketType?: string | null): boolean {
+  return isWicket && wicketType !== 'retired_hurt';
+}
+
+/**
  * Scoring Engine — core ball-by-ball logic.
  *
  * Per context.md section 13:
@@ -204,6 +212,8 @@ export class ScoringEngine {
       // Determine legality
       const isLegal = input.extraType !== 'wide' && input.extraType !== 'noball';
       const totalRuns = input.runsBatsman + input.runsExtras;
+      const countsAsWicket = countsAsInningsWicket(input.isWicket, input.wicketType);
+      const retiredHurt = input.isWicket && input.wicketType === 'retired_hurt';
 
       // Free-hit detection with carryover chaining:
       // A free hit is triggered after a no-ball. The free-hit chain continues if:
@@ -222,7 +232,7 @@ export class ScoringEngine {
             && (previousDelivery?.extraType === 'wide' || previousDelivery?.extraType === 'noball'));
 
       // During free-hit, only run-out dismissals are valid (context.md section 5.10)
-      if (isFreeHit && input.isWicket && input.wicketType !== 'run_out') {
+      if (isFreeHit && countsAsWicket && input.wicketType !== 'run_out') {
         throw new Error('VALIDATION_ERROR: During a free-hit, only run-out dismissals are valid');
       }
 
@@ -276,7 +286,7 @@ export class ScoringEngine {
 
       // Compute state snapshot AFTER this ball
       const newInningsScore = context.inningsState.totalRuns + totalRuns;
-      const newInningsWickets = context.inningsState.totalWickets + (input.isWicket ? 1 : 0);
+      const newInningsWickets = context.inningsState.totalWickets + (countsAsWicket ? 1 : 0);
       const oversCompleted = isLegal && newLegalBalls >= ballsPerOver
         ? activeOver.overNumber + 1
         : activeOver.overNumber;
@@ -305,11 +315,11 @@ export class ScoringEngine {
         extraType: input.extraType || null,
         totalRuns,
         isFreeHit,
-        isWicket: input.isWicket,
+        isWicket: countsAsWicket,
         wicketType: input.wicketType || null,
         dismissedId: input.dismissedId || null,
         fielderIds: input.fielderIds || [],
-        isRetiredHurt: input.isRetiredHurt || false,
+        isRetiredHurt: retiredHurt || input.isRetiredHurt || false,
         shotType: input.shotType || null,
         landingX: input.landingX?.toString() || null,
         landingY: input.landingY?.toString() || null,
@@ -356,7 +366,7 @@ export class ScoringEngine {
         legalBalls: newLegalBalls,
         totalBalls: activeOver.totalBalls + 1,
         runsConceded: sql`${over.runsConceded} + ${totalRuns}`,
-        wicketsTaken: input.isWicket ? sql`${over.wicketsTaken} + 1` : over.wicketsTaken,
+        wicketsTaken: countsAsWicket ? sql`${over.wicketsTaken} + 1` : over.wicketsTaken,
       }).where(eq(over.id, activeOver.id));
 
       // Update innings totals
@@ -579,6 +589,7 @@ export class ScoringEngine {
         const newRuns = batCard.runsScored - lastDelivery.runsBatsman;
         const newBalls = batCard.ballsFaced - ballsFacedDecrement;
         const wasStrikerDismissed = lastDelivery.isWicket && lastDelivery.dismissedId === lastDelivery.strikerId;
+        const wasStrikerRetired = lastDelivery.isRetiredHurt && lastDelivery.dismissedId === lastDelivery.strikerId;
 
         await tx.update(battingScorecard).set({
           runsScored: newRuns,
@@ -591,16 +602,17 @@ export class ScoringEngine {
           singles: lastDelivery.runsBatsman === 1 ? batCard.singles - 1 : batCard.singles,
           doubles: lastDelivery.runsBatsman === 2 ? batCard.doubles - 1 : batCard.doubles,
           triples: lastDelivery.runsBatsman === 3 ? batCard.triples - 1 : batCard.triples,
-          // If this delivery dismissed the striker, revert dismissal
+          // If this delivery dismissed or retired the striker, revert that
           isOut: wasStrikerDismissed ? false : batCard.isOut,
-          dismissalType: wasStrikerDismissed ? null : batCard.dismissalType,
+          dismissalType: wasStrikerDismissed || wasStrikerRetired ? null : batCard.dismissalType,
           dismissedById: wasStrikerDismissed ? null : batCard.dismissedById,
           fielderId: wasStrikerDismissed ? null : batCard.fielderId,
+          ...(wasStrikerRetired ? { isNotOut: false } : {}),
         }).where(eq(battingScorecard.id, batCard.id));
       }
 
       // Also handle non-striker dismissal (e.g., run-out of non-striker)
-      if (lastDelivery.isWicket && lastDelivery.dismissedId && lastDelivery.dismissedId !== lastDelivery.strikerId) {
+      if ((lastDelivery.isWicket || lastDelivery.isRetiredHurt) && lastDelivery.dismissedId && lastDelivery.dismissedId !== lastDelivery.strikerId) {
         const nonStrikerCard = await tx.query.battingScorecard.findFirst({
           where: and(
             eq(battingScorecard.inningsId, inningsId),
@@ -613,6 +625,7 @@ export class ScoringEngine {
             dismissalType: null,
             dismissedById: null,
             fielderId: null,
+            ...(lastDelivery.isRetiredHurt ? { isNotOut: false } : {}),
           }).where(eq(battingScorecard.id, nonStrikerCard.id));
         }
       }
@@ -690,7 +703,7 @@ export class ScoringEngine {
 
       // ── 5. Revert partnership ─────────────────────────────────────────────
       // If the delivery caused a wicket, it ended the active partnership. Reopen it.
-      if (lastDelivery.isWicket) {
+      if (lastDelivery.isWicket || lastDelivery.isRetiredHurt) {
         // The most recently ended partnership is the one this delivery closed
         const endedPartnership = await tx.query.partnership.findFirst({
           where: and(
@@ -908,6 +921,10 @@ export class ScoringEngine {
     if (existing) {
       const newRuns = existing.runsScored + input.runsBatsman;
       const newBalls = existing.ballsFaced + ballsFacedIncrement;
+      const strikerInvolved = input.isWicket && input.dismissedId === input.strikerId;
+      const strikerOut = countsAsInningsWicket(input.isWicket, input.wicketType)
+        && input.dismissedId === input.strikerId;
+      const strikerRetired = strikerInvolved && input.wicketType === 'retired_hurt';
       await tx.update(battingScorecard).set({
         runsScored: newRuns,
         ballsFaced: newBalls,
@@ -918,13 +935,12 @@ export class ScoringEngine {
         singles: input.runsBatsman === 1 ? existing.singles + 1 : existing.singles,
         doubles: input.runsBatsman === 2 ? existing.doubles + 1 : existing.doubles,
         triples: input.runsBatsman === 3 ? existing.triples + 1 : existing.triples,
-        isOut: input.isWicket && input.dismissedId === input.strikerId,
-        dismissalType: input.isWicket && input.dismissedId === input.strikerId
-          ? input.wicketType : existing.dismissalType,
-        dismissedById: input.isWicket && input.dismissedId === input.strikerId
-          ? input.bowlerId : existing.dismissedById,
-        fielderId: input.isWicket && input.dismissedId === input.strikerId && input.fielderIds?.[0]
+        isOut: strikerOut,
+        dismissalType: strikerInvolved ? input.wicketType : existing.dismissalType,
+        dismissedById: strikerOut ? input.bowlerId : existing.dismissedById,
+        fielderId: strikerOut && input.fielderIds?.[0]
           ? input.fielderIds[0] : existing.fielderId,
+        ...(strikerRetired ? { isNotOut: true } : {}),
       }).where(eq(battingScorecard.id, existing.id));
     } else {
       // Insert new batting scorecard record if none exists (upsert pattern)
@@ -945,13 +961,14 @@ export class ScoringEngine {
         singles: input.runsBatsman === 1 ? 1 : 0,
         doubles: input.runsBatsman === 2 ? 1 : 0,
         triples: input.runsBatsman === 3 ? 1 : 0,
-        isOut: input.isWicket && input.dismissedId === input.strikerId,
+        isOut: countsAsInningsWicket(input.isWicket, input.wicketType) && input.dismissedId === input.strikerId,
         dismissalType: input.isWicket && input.dismissedId === input.strikerId
           ? input.wicketType : null,
-        dismissedById: input.isWicket && input.dismissedId === input.strikerId
+        dismissedById: countsAsInningsWicket(input.isWicket, input.wicketType) && input.dismissedId === input.strikerId
           ? input.bowlerId : null,
-        fielderId: input.isWicket && input.dismissedId === input.strikerId && input.fielderIds?.[0]
+        fielderId: countsAsInningsWicket(input.isWicket, input.wicketType) && input.dismissedId === input.strikerId && input.fielderIds?.[0]
           ? input.fielderIds[0] : null,
+        isNotOut: input.isWicket && input.wicketType === 'retired_hurt' && input.dismissedId === input.strikerId,
         didNotBat: false,
       });
     }
@@ -965,11 +982,13 @@ export class ScoringEngine {
         ),
       });
       if (dismissedCard) {
+        const retiredHurt = input.wicketType === 'retired_hurt';
         await tx.update(battingScorecard).set({
-          isOut: true,
+          isOut: !retiredHurt,
           dismissalType: input.wicketType,
-          dismissedById: this.isBowlerWicket(input.wicketType) ? input.bowlerId : null,
+          dismissedById: !retiredHurt && this.isBowlerWicket(input.wicketType) ? input.bowlerId : null,
           fielderId: input.fielderIds?.[0] ?? dismissedCard.fielderId,
+          ...(retiredHurt ? { isNotOut: true } : {}),
         }).where(eq(battingScorecard.id, dismissedCard.id));
       }
     }

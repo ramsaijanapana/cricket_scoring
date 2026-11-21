@@ -2,8 +2,10 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveStrikerRotation,
   checkInningsCompletion,
+  countsAsInningsWicket,
   scoringEngine,
 } from './scoring-engine';
+import { recordDeliverySchema } from '../middleware/validation';
 
 /**
  * Cricket Scoring Engine Tests
@@ -258,6 +260,58 @@ describe('ScoringEngine — Over Completion', () => {
 
   it('leg-byes ARE legal deliveries (count toward over)', () => {
     expect(isLegalDelivery('legbye')).toBe(true);
+  });
+});
+
+describe('ScoringEngine — Wickets that are not dismissals', () => {
+  it('retired hurt does not add a wicket, so nine wickets plus a retirement is not all out', () => {
+    expect(countsAsInningsWicket(true, 'retired_hurt')).toBe(false);
+    expect(countsAsInningsWicket(true, 'bowled')).toBe(true);
+    expect(countsAsInningsWicket(true, 'caught_and_bowled')).toBe(true);
+    expect(countsAsInningsWicket(false, 'bowled')).toBe(false);
+    // The innings wicket counter only moves for countsAsInningsWicket.
+    // Nine real wickets and one retired batter must leave the last batter able to bat.
+    expect(checkInningsCompletion(9, null, 20, 80, null)).toBe(false);
+    expect(checkInningsCompletion(10, null, 20, 80, null)).toBe(true);
+  });
+});
+
+describe('Delivery validation — caught and bowled', () => {
+  const striker = '00000000-0000-4000-8000-000000000001';
+
+  it('accepts caught_and_bowled, the dismissal the scoring wicket modal sends', () => {
+    const parsed = recordDeliverySchema.safeParse({
+      innings_num: 1,
+      bowler_id: 'bowler-1',
+      striker_id: striker,
+      non_striker_id: 'non-striker-1',
+      runs_batsman: 0,
+      runs_extras: 0,
+      extra_type: null,
+      is_wicket: true,
+      wicket_type: 'caught_and_bowled',
+      dismissed_player_id: striker,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.wicket_type).toBe('caught_and_bowled');
+    }
+  });
+
+  it('still accepts retired_hurt so the engine can record it without adding a wicket', () => {
+    const parsed = recordDeliverySchema.safeParse({
+      innings_num: 1,
+      bowler_id: 'bowler-1',
+      striker_id: striker,
+      non_striker_id: 'non-striker-1',
+      runs_batsman: 0,
+      runs_extras: 0,
+      extra_type: null,
+      is_wicket: true,
+      wicket_type: 'retired_hurt',
+      dismissed_player_id: striker,
+    });
+    expect(parsed.success).toBe(true);
   });
 });
 
