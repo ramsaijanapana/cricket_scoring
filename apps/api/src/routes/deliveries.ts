@@ -10,6 +10,7 @@ import {
   orchestrateDeliveryRecorded,
   orchestrateDeliveryUndone,
 } from '../services/scoring-orchestrator';
+import { invalidateMatchCache } from '../services/cache';
 
 /**
  * Delivery routes — context.md section 6.1
@@ -125,6 +126,10 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       throw err;
     }
 
+    if (result.matchCompleted) {
+      await invalidateMatchCache(req.params.id);
+    }
+
     orchestrateDeliveryRecorded(req.params.id, result, {
       inningsNum: input.inningsNum,
       preInningsScore: preDeliveryInningsScore,
@@ -142,6 +147,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       newNonStrikerId: result.newNonStrikerId,
       scorecardSnapshot: result.scorecardSnapshot,
       powerplay: result.scorecardSnapshot.powerplay,
+      resultSummary: result.resultSummary,
     });
   });
 
@@ -169,6 +175,7 @@ export const deliveryRoutes: FastifyPluginAsync = async (app) => {
       return reply.status(404).send({ error: 'No delivery to undo' });
     }
 
+    await invalidateMatchCache(req.params.id);
     orchestrateDeliveryUndone(req.params.id, result.overriddenId!);
 
     return { success: true, overriddenDeliveryId: result.overriddenId };
