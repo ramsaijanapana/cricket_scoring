@@ -320,7 +320,7 @@ export function ScoringPage() {
             score: result.scorecardSnapshot?.innings_score ?? currentInnings?.totalRuns ?? 0,
             wickets: result.scorecardSnapshot?.innings_wickets ?? currentInnings?.totalWickets ?? 0,
             overs: result.scorecardSnapshot?.innings_overs ?? currentInnings?.totalOvers ?? '0.0',
-            resultSummary: matchData?.resultSummary || undefined,
+            resultSummary: result.resultSummary || matchData?.resultSummary || undefined,
           });
         }
       }

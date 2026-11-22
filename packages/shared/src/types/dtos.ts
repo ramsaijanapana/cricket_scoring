@@ -66,6 +66,7 @@ export interface RecordDeliveryResult {
   overCompleted: boolean;
   inningsCompleted: boolean;
   matchCompleted: boolean;
+  resultSummary?: string | null;
   newStrikerId: string;
   newNonStrikerId: string;
   scorecardSnapshot: ScorecardSnapshot;

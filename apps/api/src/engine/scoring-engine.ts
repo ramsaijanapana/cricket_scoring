@@ -1,8 +1,8 @@
 import { db, type TxOrDb } from '../db/index';
 import { delivery, over, innings, commentary, partnership, auditLog } from '../db/schema/index';
 import { battingScorecard, bowlingScorecard, fieldingScorecard } from '../db/schema/scorecard';
-import { matchFormatConfig, match } from '../db/schema/index';
-import { eq, and, sql, desc } from 'drizzle-orm';
+import { matchFormatConfig, match, team } from '../db/schema/index';
+import { eq, and, sql, desc, inArray } from 'drizzle-orm';
 import type { DeliveryInput, Commentary as CommentaryType } from '@cricket/shared';
 import { CommentaryEngine } from './commentary-engine';
 import { dlsEngine } from './dls-engine';
@@ -62,6 +62,8 @@ export interface ScoringResult {
   };
   /** DLS par score at this point in the chase (null if DLS not active) */
   dlsParScore: number | null;
+  /** Stored result line when this delivery finished the match. */
+  resultSummary: string | null;
 }
 
 export function resolveStrikerRotation(
@@ -101,6 +103,159 @@ export function checkInningsCompletion(
   if (completedOverNumber !== null && maxOvers !== null && completedOverNumber >= maxOvers) return true;
   if (target !== null && runs >= target) return true;
   return false;
+}
+
+export interface SettledInnings {
+  inningsNumber: number;
+  battingTeamId: string;
+  totalRuns: number;
+  totalWickets: number;
+  status: string;
+  isSuperOver: boolean;
+  /** Runs the chasing side must reach to win. Null when the chase is the opponent's total plus one. */
+  targetScore: number | null;
+}
+
+export interface MatchSettlement {
+  winnerTeamId: string | null;
+  winMarginRuns: number | null;
+  winMarginWickets: number | null;
+  resultSummary: string;
+}
+
+function sideName(id: string, names: Record<string, string>): string {
+  return names[id] || 'Team';
+}
+
+function runsPhrase(n: number): string {
+  return `${n} ${n === 1 ? 'run' : 'runs'}`;
+}
+
+function wicketsPhrase(n: number): string {
+  return `${n} ${n === 1 ? 'wicket' : 'wickets'}`;
+}
+
+/**
+ * Result of a completed chase. `targetScore` on the chasing innings is the
+ * score required to win. A tie stays live when `tieStaysLive` so a super over
+ * can still be played.
+ */
+function settleChase(
+  defending: SettledInnings,
+  chasing: SettledInnings,
+  maxWickets: number,
+  teamNames: Record<string, string>,
+  tieStaysLive: boolean,
+): MatchSettlement | null {
+  const toWin = chasing.targetScore != null ? chasing.targetScore : defending.totalRuns + 1;
+  const tieScore = toWin - 1;
+
+  if (chasing.totalRuns >= toWin) {
+    const remaining = Math.max(0, maxWickets - chasing.totalWickets);
+    const name = sideName(chasing.battingTeamId, teamNames);
+    return {
+      winnerTeamId: chasing.battingTeamId,
+      winMarginRuns: null,
+      winMarginWickets: remaining,
+      resultSummary: remaining > 0 ? `${name} won by ${wicketsPhrase(remaining)}` : `${name} won`,
+    };
+  }
+
+  if (chasing.totalRuns === tieScore) {
+    if (tieStaysLive) return null;
+    return {
+      winnerTeamId: null,
+      winMarginRuns: null,
+      winMarginWickets: null,
+      resultSummary: 'Match tied',
+    };
+  }
+
+  const margin = tieScore - chasing.totalRuns;
+  return {
+    winnerTeamId: defending.battingTeamId,
+    winMarginRuns: margin,
+    winMarginWickets: null,
+    resultSummary: `${sideName(defending.battingTeamId, teamNames)} won by ${runsPhrase(margin)}`,
+  };
+}
+
+/**
+ * Whether the innings that just finished also finishes the match, and the
+ * result to store. Returns null while the match should stay live, including
+ * a tie that still has a super over to play.
+ */
+export function resolveMatchResult(
+  inningsList: SettledInnings[],
+  options: { inningsPerSide: number; hasSuperOver: boolean },
+  teamNames: Record<string, string> = {},
+): MatchSettlement | null {
+  const completed = inningsList.filter((row) => row.status === 'completed');
+  const supers = completed
+    .filter((row) => row.isSuperOver)
+    .sort((a, b) => a.inningsNumber - b.inningsNumber);
+  const regular = completed
+    .filter((row) => !row.isSuperOver)
+    .sort((a, b) => a.inningsNumber - b.inningsNumber);
+
+  if (supers.length > 0) {
+    if (supers.length % 2 !== 0) return null;
+    return settleChase(supers[supers.length - 2], supers[supers.length - 1], 2, teamNames, true);
+  }
+
+  if (options.inningsPerSide <= 1) {
+    const first = regular.find((row) => row.inningsNumber === 1);
+    const second = regular.find((row) => row.inningsNumber === 2);
+    if (!first || !second) return null;
+    return settleChase(first, second, 10, teamNames, options.hasSuperOver);
+  }
+
+  if (regular.length < options.inningsPerSide * 2) return null;
+
+  const last = regular[regular.length - 1];
+  if (last.targetScore != null) {
+    const opponent = regular.find((row) => row.battingTeamId !== last.battingTeamId);
+    if (!opponent) return null;
+    return settleChase(
+      {
+        inningsNumber: 0,
+        battingTeamId: opponent.battingTeamId,
+        totalRuns: last.targetScore - 1,
+        totalWickets: 0,
+        status: 'completed',
+        isSuperOver: false,
+        targetScore: null,
+      },
+      last,
+      10,
+      teamNames,
+      false,
+    );
+  }
+
+  const totals = new Map<string, number>();
+  for (const row of regular) {
+    totals.set(row.battingTeamId, (totals.get(row.battingTeamId) ?? 0) + row.totalRuns);
+  }
+  const sides = [...totals.entries()];
+  if (sides.length < 2) return null;
+  const [sideA, sideB] = sides;
+  if (sideA[1] === sideB[1]) {
+    return {
+      winnerTeamId: null,
+      winMarginRuns: null,
+      winMarginWickets: null,
+      resultSummary: 'Match tied',
+    };
+  }
+  const winner = sideA[1] > sideB[1] ? sideA : sideB;
+  const loser = sideA[1] > sideB[1] ? sideB : sideA;
+  return {
+    winnerTeamId: winner[0],
+    winMarginRuns: winner[1] - loser[1],
+    winMarginWickets: null,
+    resultSummary: `${sideName(winner[0], teamNames)} won by ${runsPhrase(winner[1] - loser[1])}`,
+  };
 }
 
 /**
@@ -198,6 +353,7 @@ export class ScoringEngine {
               : null,
           },
           dlsParScore: null,
+          resultSummary: null,
         };
       }
 
@@ -421,17 +577,17 @@ export class ScoringEngine {
         }
       }
 
+      let matchSettlement: MatchSettlement | null = null;
       if (inningsCompleted) {
         await tx.update(innings).set({
           status: 'completed',
           allOut: newInningsWickets >= effectiveMaxWickets,
           endedAt: new Date(),
         }).where(eq(innings.id, context.inningsId));
+        matchSettlement = await this.persistMatchResult(input.matchId, tx);
       }
 
-      const matchCompleted = inningsCompleted && await this.checkMatchCompletion(
-        input.matchId, context.formatConfig.inningsPerSide, tx,
-      );
+      const matchCompleted = matchSettlement !== null;
 
       // Striker rotation
       const { newStrikerId, newNonStrikerId } = resolveStrikerRotation(
@@ -488,6 +644,7 @@ export class ScoringEngine {
         newNonStrikerId,
         scorecardSnapshot,
         dlsParScore,
+        resultSummary: matchSettlement?.resultSummary ?? null,
       };
     });
   }
@@ -566,6 +723,20 @@ export class ScoringEngine {
           allOut: false,
           endedAt: null,
         }).where(eq(innings.id, inningsId));
+      }
+
+      // The ball that ended the match is the last one. Undoing it reopens the result.
+      const matchRow = await tx.query.match.findFirst({ where: eq(match.id, matchId) });
+      if (matchRow?.status === 'completed') {
+        await tx.update(match).set({
+          status: 'live',
+          winnerTeamId: null,
+          winMarginRuns: null,
+          winMarginWickets: null,
+          resultSummary: null,
+          actualEnd: null,
+          updatedAt: new Date(),
+        }).where(eq(match.id, matchId));
       }
 
       // ── 2. Revert batting scorecard ───────────────────────────────────────
@@ -823,15 +994,53 @@ export class ScoringEngine {
 
   // ─── Private Helpers ─────────────────────────────────────────────────────
 
-  private async checkMatchCompletion(matchId: string, inningsPerSide: number, tx: TxOrDb = db): Promise<boolean> {
-    const allInnings = await tx.query.innings.findMany({
+  private async persistMatchResult(matchId: string, tx: TxOrDb = db): Promise<MatchSettlement | null> {
+    const matchData = await tx.query.match.findFirst({ where: eq(match.id, matchId) });
+    if (!matchData) return null;
+
+    const formatConfig = await tx.query.matchFormatConfig.findFirst({
+      where: eq(matchFormatConfig.id, matchData.formatConfigId),
+    });
+    if (!formatConfig) return null;
+
+    const rows = await tx.query.innings.findMany({
       where: eq(innings.matchId, matchId),
     });
-    const completed = allInnings.filter(i => i.status === 'completed').length;
+    const teamIds = [...new Set(rows.map((row) => row.battingTeamId))];
+    const teams = teamIds.length > 0
+      ? await tx.query.team.findMany({ where: inArray(team.id, teamIds) })
+      : [];
+    const teamNames = Object.fromEntries(teams.map((row) => [row.id, row.name]));
 
-    if (inningsPerSide === 1 && completed >= 2) return true;
-    if (inningsPerSide === 2 && completed >= 4) return true;
-    return false;
+    const settlement = resolveMatchResult(
+      rows.map((row) => ({
+        inningsNumber: row.inningsNumber,
+        battingTeamId: row.battingTeamId,
+        totalRuns: row.totalRuns,
+        totalWickets: row.totalWickets,
+        status: row.status,
+        isSuperOver: row.isSuperOver,
+        targetScore: row.targetScore,
+      })),
+      {
+        inningsPerSide: formatConfig.inningsPerSide,
+        hasSuperOver: formatConfig.hasSuperOver ?? false,
+      },
+      teamNames,
+    );
+    if (!settlement) return null;
+
+    await tx.update(match).set({
+      status: 'completed',
+      winnerTeamId: settlement.winnerTeamId,
+      winMarginRuns: settlement.winMarginRuns,
+      winMarginWickets: settlement.winMarginWickets,
+      resultSummary: settlement.resultSummary,
+      actualEnd: new Date(),
+      updatedAt: new Date(),
+    }).where(eq(match.id, matchId));
+
+    return settlement;
   }
 
   private async getContext(matchId: string, inningsNumOrId: number | string, tx: TxOrDb = db): Promise<ScoringContext> {

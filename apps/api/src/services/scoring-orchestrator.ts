@@ -359,8 +359,22 @@ export function orchestrateDeliveryRecorded(
     console.error('Notification queueing error:', err);
   });
 
+  if (result.matchCompleted) {
+    try {
+      broadcast.status(matchId, {
+        status: 'completed',
+        reason: result.resultSummary ?? 'Match completed',
+      });
+    } catch (err) {
+      console.error('Match status broadcast error:', err);
+    }
+  }
+
   cacheSet(`match:${matchId}:live_score`, result.scorecardSnapshot, 60);
   cacheInvalidate(`match:${matchId}:scorecard`);
+  if (result.matchCompleted) {
+    cacheInvalidate(`match:${matchId}:detail`);
+  }
 }
 
 /**

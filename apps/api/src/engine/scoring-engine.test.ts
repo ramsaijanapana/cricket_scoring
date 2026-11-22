@@ -2,7 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveStrikerRotation,
   checkInningsCompletion,
+  resolveMatchResult,
   scoringEngine,
+  type SettledInnings,
 } from './scoring-engine';
 
 /**
@@ -712,5 +714,171 @@ describe('ScoringEngine — Powerplay Detection', () => {
 
   it('empty config returns null', () => {
     expect(scoringEngine.getCurrentPowerplay(0, [])).toBeNull();
+  });
+});
+
+function settled(partial: Partial<SettledInnings> & Pick<SettledInnings, 'inningsNumber' | 'battingTeamId' | 'totalRuns'>): SettledInnings {
+  return {
+    totalWickets: 0,
+    status: 'completed',
+    isSuperOver: false,
+    targetScore: null,
+    ...partial,
+  };
+}
+
+describe('resolveMatchResult', () => {
+  const names = { 'team-a': 'Australia', 'team-b': 'India' };
+
+  it('does not finish the match after the first innings', () => {
+    expect(resolveMatchResult(
+      [settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 180 })],
+      { inningsPerSide: 1, hasSuperOver: true },
+      names,
+    )).toBeNull();
+  });
+
+  it('records a chase won by wickets against the winning target', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 180 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 181, totalWickets: 3, targetScore: 181 }),
+      ],
+      { inningsPerSide: 1, hasSuperOver: true },
+      names,
+    )).toEqual({
+      winnerTeamId: 'team-b',
+      winMarginRuns: null,
+      winMarginWickets: 7,
+      resultSummary: 'India won by 7 wickets',
+    });
+  });
+
+  it('records a defence won by runs, including a DLS target', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 180 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 100, totalWickets: 10, targetScore: 141 }),
+      ],
+      { inningsPerSide: 1, hasSuperOver: true },
+      names,
+    )).toEqual({
+      winnerTeamId: 'team-a',
+      winMarginRuns: 40,
+      winMarginWickets: null,
+      resultSummary: 'Australia won by 40 runs',
+    });
+  });
+
+  it('uses the first innings total when the chase has no stored target', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 180 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 150, totalWickets: 10 }),
+      ],
+      { inningsPerSide: 1, hasSuperOver: false },
+      names,
+    )).toMatchObject({
+      winnerTeamId: 'team-a',
+      winMarginRuns: 30,
+      resultSummary: 'Australia won by 30 runs',
+    });
+  });
+
+  it('leaves a tied limited-overs match live when a super over is still available', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 180 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 180, totalWickets: 6, targetScore: 181 }),
+      ],
+      { inningsPerSide: 1, hasSuperOver: true },
+      names,
+    )).toBeNull();
+  });
+
+  it('stores a tie when the format has no super over', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 180 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 180, targetScore: 181 }),
+      ],
+      { inningsPerSide: 1, hasSuperOver: false },
+      names,
+    )).toEqual({
+      winnerTeamId: null,
+      winMarginRuns: null,
+      winMarginWickets: null,
+      resultSummary: 'Match tied',
+    });
+  });
+
+  it('waits for the chasing super over', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 160 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 160, targetScore: 161 }),
+        settled({ inningsNumber: 3, battingTeamId: 'team-a', totalRuns: 12, isSuperOver: true }),
+      ],
+      { inningsPerSide: 1, hasSuperOver: true },
+      names,
+    )).toBeNull();
+  });
+
+  it('finishes a super over won by wickets and ignores the tied regulation scores', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 160 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 160, targetScore: 161 }),
+        settled({ inningsNumber: 3, battingTeamId: 'team-a', totalRuns: 10, isSuperOver: true }),
+        settled({ inningsNumber: 4, battingTeamId: 'team-b', totalRuns: 12, totalWickets: 1, isSuperOver: true, targetScore: 11 }),
+      ],
+      { inningsPerSide: 1, hasSuperOver: true },
+      names,
+    )).toEqual({
+      winnerTeamId: 'team-b',
+      winMarginRuns: null,
+      winMarginWickets: 1,
+      resultSummary: 'India won by 1 wicket',
+    });
+  });
+
+  it('leaves a tied super over live for another one', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 3, battingTeamId: 'team-a', totalRuns: 10, isSuperOver: true }),
+        settled({ inningsNumber: 4, battingTeamId: 'team-b', totalRuns: 10, isSuperOver: true, targetScore: 11 }),
+      ],
+      { inningsPerSide: 1, hasSuperOver: true },
+      names,
+    )).toBeNull();
+  });
+
+  it('records a multi-day win by wickets when the fourth innings reaches its target', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 300 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 250 }),
+        settled({ inningsNumber: 3, battingTeamId: 'team-a', totalRuns: 200 }),
+        settled({ inningsNumber: 4, battingTeamId: 'team-b', totalRuns: 251, totalWickets: 4, targetScore: 251 }),
+      ],
+      { inningsPerSide: 2, hasSuperOver: false },
+      names,
+    )).toEqual({
+      winnerTeamId: 'team-b',
+      winMarginRuns: null,
+      winMarginWickets: 6,
+      resultSummary: 'India won by 6 wickets',
+    });
+  });
+
+  it('does not finish a multi-day match before four innings are complete', () => {
+    expect(resolveMatchResult(
+      [
+        settled({ inningsNumber: 1, battingTeamId: 'team-a', totalRuns: 300 }),
+        settled({ inningsNumber: 2, battingTeamId: 'team-b', totalRuns: 100, totalWickets: 10 }),
+      ],
+      { inningsPerSide: 2, hasSuperOver: false },
+      names,
+    )).toBeNull();
   });
 });
