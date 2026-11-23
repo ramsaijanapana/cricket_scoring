@@ -26,7 +26,9 @@ export async function replayPendingDeliveries(
       syncedCount++;
       setSyncStatus('pending', matchPending.length - syncedCount);
     } catch {
-      await offlineStore.markFailed(entry.id);
+      // Leave this ball pending and stop. Posting a later ball first writes
+      // the over out of order, and a later retry cannot put this one back.
+      break;
     }
   }
 

@@ -47,7 +47,7 @@ describe('replayPendingDeliveries', () => {
     expect(remaining[0].matchId).toBe('match-2');
   });
 
-  it('marks failed deliveries and keeps pending count', async () => {
+  it('keeps a failed delivery pending', async () => {
     await offlineStore.queueDelivery('match-1', { runs: 1 });
     vi.mocked(api.recordDelivery).mockRejectedValueOnce(new Error('network'));
 
@@ -57,6 +57,20 @@ describe('replayPendingDeliveries', () => {
     expect(setSyncStatus).toHaveBeenLastCalledWith('pending', 1);
     const remaining = await offlineStore.getPendingDeliveries();
     expect(remaining).toHaveLength(1);
+  });
+
+  it('does not post balls queued after one that failed to sync', async () => {
+    await offlineStore.queueDelivery('match-1', { runs: 1 });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await offlineStore.queueDelivery('match-1', { runs: 4 });
+    vi.mocked(api.recordDelivery).mockRejectedValueOnce(new Error('network'));
+
+    await replayPendingDeliveries('match-1', vi.fn(), vi.fn());
+
+    expect(api.recordDelivery).toHaveBeenCalledTimes(1);
+    expect(api.recordDelivery).toHaveBeenCalledWith('match-1', { runs: 1 });
+    const remaining = await offlineStore.getPendingDeliveries();
+    expect(remaining.map((entry) => entry.payload.runs).sort()).toEqual([1, 4]);
   });
 });
 
