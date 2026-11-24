@@ -33,6 +33,17 @@ import {
   syncPendingDeliveries,
   showSyncConflictAlert,
 } from "../../../lib/offline-sync";
+import {
+  PENDING_NEW_BATSMAN,
+  notOutBatterIds,
+  openingRoles,
+  rolesAfterDelivery,
+  rolesBeforeDelivery,
+  rolesFromDeliveryResult,
+  rolesFromLastDelivery,
+  shouldQueueDeliveryFailure,
+  type ScoringRoles,
+} from "../../../lib/scoring-roles";
 
 const RUN_BUTTONS = [0, 1, 2, 3, 4, 6] as const;
 
@@ -86,6 +97,8 @@ function getScoringContext(match: any, currentInnings: any) {
   return {
     homeTeam: match?.teams?.find((t: any) => t.designation === "home"),
     awayTeam: match?.teams?.find((t: any) => t.designation === "away"),
+    battingXi,
+    bowlingXi,
     strikerId,
     nonStrikerId,
     bowlerId,
@@ -102,12 +115,14 @@ function buildDeliveryPayload(
   runs: number,
   selectedExtra: RecordDeliveryInput["extra_type"],
   isWicket: boolean,
+  roles: ScoringRoles,
 ): RecordDeliveryInput | null {
   const currentInnings = getCurrentInnings(match);
   if (!currentInnings) return null;
 
-  const { strikerId, nonStrikerId, bowlerId } = getScoringContext(match, currentInnings);
+  const { strikerId, nonStrikerId, bowlerId } = roles;
   if (!strikerId || !nonStrikerId || !bowlerId) return null;
+  if (strikerId === PENDING_NEW_BATSMAN || nonStrikerId === PENDING_NEW_BATSMAN) return null;
 
   const payload: RecordDeliveryInput = {
     client_id: crypto.randomUUID(),
@@ -152,8 +167,10 @@ export default function LiveScoringScreen() {
   const [isWicket, setIsWicket] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const [isConnected, setIsConnected] = useState(true);
+  const [roles, setRoles] = useState<(ScoringRoles & { inningsId: string }) | null>(null);
   const unsubMatchEvent = useRef<(() => void) | null>(null);
   const undoStackPosRef = useRef(0);
+  const rolesInningsRef = useRef<string | null>(null);
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
 
@@ -276,12 +293,67 @@ export default function LiveScoringScreen() {
     fetchMatch();
   }, [fetchMatch]);
 
-  const recordBall = async (runs: number) => {
-    if (!id || submitting || !match) return;
+  // Strike and bowler stay with the crease. Re-reading the scorecard after
+  // each ball picks whoever has faced the most deliveries, so a single never
+  // changes ends and the same bowler is sent into the next over.
+  useEffect(() => {
+    const innings = getCurrentInnings(match);
+    if (!id || !innings?.id) return;
+    if (rolesInningsRef.current === innings.id) return;
 
-    const payload = buildDeliveryPayload(match, runs, selectedExtra, isWicket);
+    const inningsId = innings.id;
+    let cancelled = false;
+
+    void (async () => {
+      const context = getScoringContext(match, innings);
+      const batters = notOutBatterIds(innings.battingScorecard ?? []);
+      const strikerId = batters[0] ?? context.battingXi?.[0];
+      const nonStrikerId = batters[1] ?? context.battingXi?.[1];
+      const bowlerId = context.bowlingXi?.[0];
+      if (!strikerId || !nonStrikerId || !bowlerId) return;
+
+      let next = openingRoles(strikerId, nonStrikerId, bowlerId);
+      try {
+        const deliveries = await api.getDeliveries(id);
+        const last = deliveries.find(
+          (delivery) =>
+            delivery.inningsId === inningsId &&
+            delivery.strikerId &&
+            delivery.nonStrikerId &&
+            delivery.bowlerId,
+        );
+        if (last?.strikerId && last.nonStrikerId && last.bowlerId) {
+          next = rolesFromLastDelivery({
+            strikerId: last.strikerId,
+            nonStrikerId: last.nonStrikerId,
+            bowlerId: last.bowlerId,
+            runsBatsman: last.runsBatsman,
+            extraType: last.extraType,
+            isWicket: last.isWicket,
+            dismissedId: last.dismissedId,
+            legalBallNum: last.legalBallNum,
+          });
+        }
+      } catch {
+        // Opening pair is enough to score the first ball.
+      }
+
+      if (cancelled) return;
+      rolesInningsRef.current = inningsId;
+      setRoles({ inningsId, ...next });
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [id, match]);
+
+  const recordBall = async (runs: number) => {
+    if (!id || submitting || !match || !roles?.bowlerId) return;
+
+    const payload = buildDeliveryPayload(match, runs, selectedExtra, isWicket, roles);
     if (!payload) {
-      Alert.alert("Error", "Match is not ready for scoring yet");
+      Alert.alert("Error", "Choose the batter and bowler before the next ball");
       return;
     }
 
@@ -311,6 +383,23 @@ export default function LiveScoringScreen() {
             undoStackPosRef.current + 1;
           undoStackPosRef.current = nextPos;
           await setUndoStackPos(id, nextPos);
+          setRoles((current) =>
+            current
+              ? {
+                  ...rolesFromDeliveryResult(current, {
+                    strikerId: payload.striker_id,
+                    nonStrikerId: payload.non_striker_id,
+                    bowlerId: payload.bowler_id,
+                    runsBatsman: payload.runs_batsman,
+                    extraType: payload.extra_type,
+                    isWicket: payload.is_wicket,
+                    dismissedId: payload.dismissed_player_id,
+                    legalBallsBefore: current.legalBallsInOver,
+                  }, result),
+                  inningsId: current.inningsId,
+                }
+              : current,
+          );
           await fetchMatch();
         } catch (err) {
           if (err instanceof ApiError && err.status === 409) {
@@ -319,16 +408,56 @@ export default function LiveScoringScreen() {
             return;
           }
 
+          if (err instanceof ApiError && !shouldQueueDeliveryFailure(err.status)) {
+            setMatch(previousMatch);
+            Alert.alert("Error", err.message || "Delivery was rejected");
+            return;
+          }
+
           await queueDelivery(id, payload);
           undoStackPosRef.current += 1;
           await setUndoStackPos(id, undoStackPosRef.current);
           await refreshPendingCount();
+          setRoles((current) =>
+            current
+              ? {
+                  ...rolesAfterDelivery({
+                    strikerId: payload.striker_id,
+                    nonStrikerId: payload.non_striker_id,
+                    bowlerId: payload.bowler_id,
+                    runsBatsman: payload.runs_batsman,
+                    extraType: payload.extra_type,
+                    isWicket: payload.is_wicket,
+                    dismissedId: payload.dismissed_player_id,
+                    legalBallsBefore: current.legalBallsInOver,
+                  }),
+                  inningsId: current.inningsId,
+                }
+              : current,
+          );
         }
       } else {
         await queueDelivery(id, payload);
         undoStackPosRef.current += 1;
         await setUndoStackPos(id, undoStackPosRef.current);
         await refreshPendingCount();
+        setRoles((current) =>
+          current
+            ? {
+                ...rolesAfterDelivery({
+                  strikerId: payload.striker_id,
+                  nonStrikerId: payload.non_striker_id,
+                  bowlerId: payload.bowler_id,
+                  runsBatsman: payload.runs_batsman,
+                  extraType: payload.extra_type,
+                  isWicket: payload.is_wicket,
+                  dismissedId: payload.dismissed_player_id,
+                  legalBallsBefore: current.legalBallsInOver,
+                }),
+                inningsId: current.inningsId,
+              }
+            : current,
+        );
       }
 
       setSelectedExtra(null);
@@ -349,6 +478,19 @@ export default function LiveScoringScreen() {
       const lastPayload = await removeLastPendingDelivery(id);
       if (lastPayload) {
         setMatch((current: any) => reverseOptimisticDelivery(current, lastPayload));
+        setRoles((current) =>
+          current
+            ? {
+                ...rolesBeforeDelivery(current, {
+                  strikerId: lastPayload.striker_id,
+                  nonStrikerId: lastPayload.non_striker_id,
+                  bowlerId: lastPayload.bowler_id,
+                  extraType: lastPayload.extra_type,
+                }),
+                inningsId: current.inningsId,
+              }
+            : current,
+        );
         undoStackPosRef.current = Math.max(0, undoStackPosRef.current - 1);
         await setUndoStackPos(id, undoStackPosRef.current);
         await refreshPendingCount();
@@ -368,6 +510,33 @@ export default function LiveScoringScreen() {
       undoStackPosRef.current = Math.max(0, undoStackPosRef.current - 1);
       await setUndoStackPos(id, undoStackPosRef.current);
       await fetchMatch();
+      try {
+        const deliveries = await api.getDeliveries(id);
+        const last = deliveries.find(
+          (delivery) =>
+            delivery.inningsId === currentInnings.id &&
+            delivery.strikerId &&
+            delivery.nonStrikerId &&
+            delivery.bowlerId,
+        );
+        if (last?.strikerId && last.nonStrikerId && last.bowlerId) {
+          setRoles({
+            inningsId: currentInnings.id,
+            ...rolesFromLastDelivery({
+              strikerId: last.strikerId,
+              nonStrikerId: last.nonStrikerId,
+              bowlerId: last.bowlerId,
+              runsBatsman: last.runsBatsman,
+              extraType: last.extraType,
+              isWicket: last.isWicket,
+              dismissedId: last.dismissedId,
+              legalBallNum: last.legalBallNum,
+            }),
+          });
+        }
+      } catch {
+        // The score refresh still shows the undone total.
+      }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to undo");
     }
@@ -381,6 +550,54 @@ export default function LiveScoringScreen() {
   const handleWicketToggle = () => {
     hapticTap();
     setIsWicket(!isWicket);
+  };
+
+  const playerName = (playerId: string | null | undefined, fallback: string) => {
+    if (!playerId || playerId === PENDING_NEW_BATSMAN) return fallback;
+    const inningsCards = [
+      ...(currentInnings?.battingScorecard ?? []),
+      ...(currentInnings?.bowlingScorecard ?? []),
+    ];
+    const fromCard = inningsCards.find((entry: any) => entry.playerId === playerId)?.playerName;
+    if (fromCard) return fromCard;
+    for (const team of match?.teams ?? []) {
+      const named = team.playerNames?.[playerId];
+      if (named) return named;
+    }
+    return fallback;
+  };
+
+  const chooseBowler = async (bowlerId: string) => {
+    if (!roles || bowlerId === roles.lastBowlerId) return;
+    hapticTap();
+    const inningsId = getCurrentInnings(match)?.id;
+    if (id && inningsId) {
+      try {
+        await api.setBowler(id, inningsId, bowlerId);
+      } catch {
+        // The next delivery still names this bowler; the card is created if needed.
+      }
+    }
+    setRoles({ ...roles, bowlerId, overCompleted: false });
+  };
+
+  const chooseReplacementBatter = async (playerId: string) => {
+    if (!roles) return;
+    hapticTap();
+    const inningsId = getCurrentInnings(match)?.id;
+    if (id && inningsId) {
+      try {
+        await api.markNewBatsman(id, inningsId, playerId);
+      } catch (err: any) {
+        Alert.alert("Error", err.message || "That batter cannot come in");
+        return;
+      }
+    }
+    setRoles({
+      ...roles,
+      strikerId: roles.strikerId === PENDING_NEW_BATSMAN ? playerId : roles.strikerId,
+      nonStrikerId: roles.nonStrikerId === PENDING_NEW_BATSMAN ? playerId : roles.nonStrikerId,
+    });
   };
 
   if (loading) {
@@ -400,9 +617,20 @@ export default function LiveScoringScreen() {
   const runRate = inn?.runRate?.toFixed(2) ?? "0.00";
   const homeTeamName = scoringContext?.homeTeam?.teamName ?? "Home";
   const awayTeamName = scoringContext?.awayTeam?.teamName ?? "Away";
-  const striker = scoringContext?.striker;
-  const nonStriker = scoringContext?.nonStriker;
-  const currentBowler = scoringContext?.bowler;
+  const strikerId = roles?.strikerId ?? scoringContext?.strikerId;
+  const nonStrikerId = roles?.nonStrikerId ?? scoringContext?.nonStrikerId;
+  const bowlerId = roles?.bowlerId ?? scoringContext?.bowlerId;
+  const striker = currentInnings?.battingScorecard?.find((b: any) => b.playerId === strikerId) ?? scoringContext?.striker;
+  const nonStriker = currentInnings?.battingScorecard?.find((b: any) => b.playerId === nonStrikerId) ?? scoringContext?.nonStriker;
+  const currentBowler = currentInnings?.bowlingScorecard?.find((b: any) => b.playerId === bowlerId) ?? null;
+  const needsBowler = !!roles && !roles.bowlerId;
+  const needsBatter = roles?.strikerId === PENDING_NEW_BATSMAN || roles?.nonStrikerId === PENDING_NEW_BATSMAN;
+  const bowlingChoices = (scoringContext?.bowlingXi ?? []).filter((playerId: string) => playerId !== roles?.lastBowlerId);
+  const batterChoices = (currentInnings?.battingScorecard ?? []).filter((entry: any) => {
+    if (!entry?.playerId || entry.isOut) return false;
+    if (entry.playerId === strikerId || entry.playerId === nonStrikerId) return false;
+    return true;
+  });
 
   return (
     <View className={`flex-1 bg-surface-900${isLandscape ? " flex-row" : ""}`}>
@@ -475,7 +703,7 @@ export default function LiveScoringScreen() {
           <View className="flex-1 rounded-lg bg-surface-800 p-3">
             <Text className="text-xs text-surface-400">Striker</Text>
             <Text className="text-base font-semibold text-white">
-              {striker?.playerName ?? "---"}
+              {striker?.playerName ?? playerName(strikerId, needsBatter && roles?.strikerId === PENDING_NEW_BATSMAN ? "New batter" : "---")}
             </Text>
             <Text className="text-sm text-surface-300">
               {striker?.runsScored ?? 0} ({striker?.ballsFaced ?? 0})
@@ -484,7 +712,7 @@ export default function LiveScoringScreen() {
           <View className="flex-1 rounded-lg bg-surface-800 p-3">
             <Text className="text-xs text-surface-400">Non-Striker</Text>
             <Text className="text-base font-semibold text-white">
-              {nonStriker?.playerName ?? "---"}
+              {nonStriker?.playerName ?? playerName(nonStrikerId, needsBatter && roles?.nonStrikerId === PENDING_NEW_BATSMAN ? "New batter" : "---")}
             </Text>
             <Text className="text-sm text-surface-300">
               {nonStriker?.runsScored ?? 0} ({nonStriker?.ballsFaced ?? 0})
@@ -496,7 +724,7 @@ export default function LiveScoringScreen() {
         <View className="mb-4 rounded-lg bg-surface-800 p-3">
           <Text className="text-xs text-surface-400">Bowler</Text>
           <Text className="text-base font-semibold text-white">
-            {currentBowler?.playerName ?? "---"}
+            {currentBowler?.playerName ?? playerName(bowlerId, needsBowler ? "Choose bowler" : "---")}
           </Text>
           <Text className="text-sm text-surface-300">
             {currentBowler?.oversBowled ?? "0"}-
@@ -547,6 +775,48 @@ export default function LiveScoringScreen() {
         }
         style={isLandscape ? { width: Math.min(width * 0.42, 420) } : undefined}
       >
+        {needsBatter && (
+          <View className="mb-3">
+            <Text className="mb-2 text-xs font-semibold text-surface-300">
+              New batter
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {batterChoices.map((entry: any) => (
+                <Pressable
+                  key={entry.playerId}
+                  onPress={() => chooseReplacementBatter(entry.playerId)}
+                  className="rounded-lg bg-surface-700 px-3 py-2 active:opacity-80"
+                >
+                  <Text className="text-xs font-semibold text-white">
+                    {entry.playerName ?? playerName(entry.playerId, "Batter")}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
+        {needsBowler && (
+          <View className="mb-3">
+            <Text className="mb-2 text-xs font-semibold text-surface-300">
+              Next bowler
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {bowlingChoices.map((playerId: string) => (
+                <Pressable
+                  key={playerId}
+                  onPress={() => chooseBowler(playerId)}
+                  className="rounded-lg bg-cricket-gold px-3 py-2 active:opacity-80"
+                >
+                  <Text className="text-xs font-semibold text-surface-900">
+                    {playerName(playerId, "Bowler")}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+
         {/* Extras toggle row */}
         <View className="mb-3 flex-row gap-2">
           {EXTRA_TYPES.map((extra) => (
@@ -586,7 +856,7 @@ export default function LiveScoringScreen() {
             <Pressable
               key={runs}
               onPress={() => recordBall(runs)}
-              disabled={submitting}
+              disabled={submitting || needsBowler || needsBatter || !roles}
               className={`flex-1 items-center rounded-xl py-4 ${
                 runs === 4
                   ? "bg-cricket-blue"
