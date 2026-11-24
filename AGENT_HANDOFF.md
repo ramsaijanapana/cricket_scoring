@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-06-22T15:28:24.481Z
-- Branch: main
-- Head: 90b56dd
-- Focus: P3 live commentary
+- Updated: 2026-11-24T11:11:38.675Z
+- Branch: cursor/critical-bug-remediation-ad18
+- Head: dadd810
+- Focus: mobile live scoring crease
 
 ## Latest Summary
 
-- P3 A++ sprint: shared UI kit, scoring refactor, match cache, API route tests, mobile offline/haptics tests, CI smoke/a11y, docs/metrics
+- Mobile scoring keeps strike from the delivery result and requires a new bowler after six legal balls, instead of re-picking the batter with the most balls and queueing the rejected next over.
 
 ## Next Steps
 
-- Monitor CI on main after push
+- Review the mobile crease fix.
 
 ## Risks / Watchouts
 
@@ -27,35 +27,25 @@
 
 ## Verification
 
-- npm test: 309 passed (api 171, web 82, mobile 56)
+- mobile vitest scoring-roles.test.ts 13 passed; tsc --noEmit passed
 
 ## Working Tree Snapshot
 
-- Changed files: 136
+- Changed files: 4
 - Staged files: 0
-- agent-context/state.json
-- .env.example
-- .github/workflows/ci.yml
-- .github/workflows/deploy.yml
-- README.md
-- apps/api/.env.example
-- apps/api/src/config.ts
-- apps/api/src/db/index.ts
-- apps/api/src/middleware/metrics.ts
-- apps/api/src/middleware/pagination.ts
-- apps/api/src/routes/analytics.ts
-- apps/api/src/routes/commentary.ts
-- apps/api/src/server.ts
-- apps/api/src/services/notification-service.ts
-- apps/api/src/services/scoring-orchestrator.ts
-- apps/api/src/services/sentry.ts
-- apps/api/src/workers/notification-worker.ts
-- apps/mobile/app.json
-- apps/mobile/app/(tabs)/_layout.tsx
-- apps/mobile/app/(tabs)/chat.tsx
-- +116 more changed files
+- pps/mobile/app/matches/[id]/score.tsx
+- apps/mobile/lib/api.ts
+- apps/mobile/lib/scoring-roles.test.ts
+- apps/mobile/lib/scoring-roles.ts
 
 ## Recent Checkpoints
+
+### 2026-11-24T11:11:38.675Z — mobile live scoring crease
+
+- Actor: ubuntu
+- Summary: Mobile scoring keeps strike from the delivery result and requires a new bowler after six legal balls, instead of re-picking the batter with the most balls and queueing the rejected next over.
+- Next: Review the mobile crease fix.
+- Verified: mobile vitest scoring-roles.test.ts 13 passed; tsc --noEmit passed
 
 ### 2026-06-22T15:28:24.481Z — P3 live commentary
 
@@ -84,13 +74,6 @@
 - Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
 - Next: Continue P3 sprint agents; commit when ready
 - Verified: apps/mobile tsc clean; npm test 56/56
-
-### 2026-06-22T15:15:59.189Z — P3 contract unification
-
-- Actor: test
-- Summary: P3 contract unification: shared dtos.ts (MatchDetail, Paginated, RecordDeliveryInput, ScorecardSnapshot, RecordDeliveryResult); normalized WS events to snake_case + WS_EVENTS; web/mobile/api migrated off local scoring DTOs
-- Next: Other P3 agents; fix mobile haptics.test.ts parse error (unrelated)
-- Verified: shared build OK; api 171/171; web 82/82; mobile contract tests 40/40; root npm test blocked by haptics.test.ts syntax
 
 ## Workflow Rule
 

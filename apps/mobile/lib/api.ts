@@ -351,12 +351,26 @@ export const api = {
     request<{
       delivery?: { undoStackPos?: number };
       idempotent?: boolean;
+      newStrikerId?: string;
+      newNonStrikerId?: string;
+      overCompleted?: boolean;
     }>(`/matches/${matchId}/deliveries`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
   getDeliveries: (matchId: string) =>
-    request<Array<{ undoStackPos: number }>>(`/matches/${matchId}/deliveries`),
+    request<Array<{
+      undoStackPos: number;
+      inningsId?: string;
+      strikerId?: string;
+      nonStrikerId?: string;
+      bowlerId?: string;
+      runsBatsman?: number;
+      extraType?: RecordDeliveryInput["extra_type"];
+      isWicket?: boolean;
+      dismissedId?: string | null;
+      legalBallNum?: number;
+    }>>(`/matches/${matchId}/deliveries`),
   undoDelivery: (matchId: string, inningsId: string) =>
     request<void>(`/matches/${matchId}/deliveries/last`, {
       method: "DELETE",
@@ -394,6 +408,11 @@ export const api = {
     request<void>(`/matches/${matchId}/innings/${inningsId}/bowler`, {
       method: "POST",
       body: JSON.stringify({ bowlerId }),
+    }),
+  markNewBatsman: (matchId: string, inningsId: string, playerId: string) =>
+    request<{ success: boolean }>(`/matches/${matchId}/innings/${inningsId}/new-batsman`, {
+      method: "POST",
+      body: JSON.stringify({ playerId }),
     }),
 
   // Analytics
