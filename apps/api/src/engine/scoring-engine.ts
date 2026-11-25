@@ -103,6 +103,85 @@ export function checkInningsCompletion(
   return false;
 }
 
+export interface OverUndoSnapshot {
+  legalBalls: number;
+  totalBalls: number;
+  runsConceded: number;
+  wicketsTaken: number;
+  maidens: boolean;
+}
+
+export interface OverUndoResult {
+  legalBalls: number;
+  totalBalls: number;
+  runsConceded: number;
+  wicketsTaken: number;
+  maidens: boolean;
+  /** This undo removed the ball that had completed a maiden. */
+  revertMaiden: boolean;
+}
+
+/**
+ * Over stats after one delivery is undone. The over row is always kept.
+ *
+ * delivery.over_id is ON DELETE CASCADE, and commentary.delivery_id is ON DELETE
+ * NO ACTION. Deleting the over tries to delete its deliveries and the commentary
+ * row rejects that, so the undo transaction rolls back. The first ball of an over
+ * would stay on the score.
+ */
+export function revertOverAfterUndo(
+  overSnapshot: OverUndoSnapshot,
+  undone: { isLegal: boolean; totalRuns: number; isWicket: boolean },
+  ballsPerOver: number,
+): OverUndoResult {
+  const newTotalBalls = overSnapshot.totalBalls - 1;
+  const revertMaiden = overSnapshot.maidens
+    && undone.isLegal
+    && overSnapshot.legalBalls >= ballsPerOver;
+
+  if (newTotalBalls <= 0) {
+    return {
+      legalBalls: 0,
+      totalBalls: 0,
+      runsConceded: 0,
+      wicketsTaken: 0,
+      maidens: false,
+      revertMaiden,
+    };
+  }
+
+  const newLegalBalls = undone.isLegal
+    ? Math.max(0, overSnapshot.legalBalls - 1)
+    : overSnapshot.legalBalls;
+
+  return {
+    legalBalls: newLegalBalls,
+    totalBalls: newTotalBalls,
+    runsConceded: overSnapshot.runsConceded - undone.totalRuns,
+    wicketsTaken: undone.isWicket ? overSnapshot.wicketsTaken - 1 : overSnapshot.wicketsTaken,
+    maidens: revertMaiden ? false : overSnapshot.maidens,
+    revertMaiden,
+  };
+}
+
+const CONSECUTIVE_BOWLER_ERROR =
+  'VALIDATION_ERROR: Same bowler cannot bowl consecutive overs. Please select a different bowler.';
+
+/**
+ * Bowler for an over that undo emptied. The row is reused so the next ball does
+ * not insert a second over with the same number. The bowler who finished the
+ * previous over still cannot start this one.
+ */
+export function bowlerForEmptyOver(
+  nextBowlerId: string,
+  previousOverBowlerId: string | null,
+): { bowlerId: string } | { error: string } {
+  if (previousOverBowlerId !== null && nextBowlerId === previousOverBowlerId) {
+    return { error: CONSECUTIVE_BOWLER_ERROR };
+  }
+  return { bowlerId: nextBowlerId };
+}
+
 /**
  * Scoring Engine — core ball-by-ball logic.
  *
@@ -244,10 +323,34 @@ export class ScoringEngine {
       let currentOver = context.currentOver;
       const ballsPerOver = context.formatConfig.ballsPerOver;
 
+      // Undo of the only ball leaves the over row in place with zero balls.
+      // Reuse it. A different bowler may take the over, except the one who
+      // bowled the previous over.
+      if (currentOver && currentOver.totalBalls === 0 && currentOver.legalBalls === 0) {
+        let previousBowlerId: string | null = null;
+        if (currentOver.overNumber > 0) {
+          const previousOver = await tx.query.over.findFirst({
+            where: and(
+              eq(over.inningsId, context.inningsId),
+              eq(over.overNumber, currentOver.overNumber - 1),
+            ),
+          });
+          previousBowlerId = previousOver?.bowlerId ?? null;
+        }
+        const assignment = bowlerForEmptyOver(input.bowlerId, previousBowlerId);
+        if ('error' in assignment) {
+          throw new Error(assignment.error);
+        }
+        if (currentOver.bowlerId !== assignment.bowlerId) {
+          await tx.update(over).set({ bowlerId: assignment.bowlerId }).where(eq(over.id, currentOver.id));
+          currentOver = { ...currentOver, bowlerId: assignment.bowlerId };
+        }
+      }
+
       if (!currentOver || currentOver.legalBalls >= ballsPerOver) {
         // Enforce: same bowler cannot bowl consecutive overs
         if (currentOver && currentOver.legalBalls >= ballsPerOver && currentOver.bowlerId === input.bowlerId) {
-          throw new Error('VALIDATION_ERROR: Same bowler cannot bowl consecutive overs. Please select a different bowler.');
+          throw new Error(CONSECUTIVE_BOWLER_ERROR);
         }
         const newOverNumber = currentOver ? currentOver.overNumber + 1 : 0; // 0-indexed per context.md
         const [newOver] = await tx.insert(over).values({
@@ -740,33 +843,32 @@ export class ScoringEngine {
       });
 
       if (overRecord) {
-        const newLegalBalls = isLegal ? overRecord.legalBalls - 1 : overRecord.legalBalls;
-        const newTotalBalls = overRecord.totalBalls - 1;
+        // Keep the over row. Deleting it cascades to this delivery and the
+        // commentary foreign key aborts the undo.
+        const reverted = revertOverAfterUndo(
+          {
+            legalBalls: overRecord.legalBalls,
+            totalBalls: overRecord.totalBalls,
+            runsConceded: overRecord.runsConceded,
+            wicketsTaken: overRecord.wicketsTaken,
+            maidens: overRecord.maidens,
+          },
+          { isLegal, totalRuns, isWicket: lastDelivery.isWicket },
+          ballsPerOver,
+        );
 
-        if (newTotalBalls <= 0) {
-          // This was the first (and only) ball of this over — delete the over entirely
-          await tx.delete(over).where(eq(over.id, overRecord.id));
-        } else {
-          // Revert maiden flag if this delivery completed the over and it was marked maiden
-          const wasMaiden = overRecord.maidens;
-          // If the over was marked as maiden and we're undoing the completing ball,
-          // revert the maiden flag. The over is no longer complete after undo.
-          const revertMaiden = wasMaiden && isLegal && overRecord.legalBalls >= ballsPerOver;
+        await tx.update(over).set({
+          legalBalls: reverted.legalBalls,
+          totalBalls: reverted.totalBalls,
+          runsConceded: reverted.runsConceded,
+          wicketsTaken: reverted.wicketsTaken,
+          maidens: reverted.maidens,
+        }).where(eq(over.id, overRecord.id));
 
-          await tx.update(over).set({
-            legalBalls: newLegalBalls,
-            totalBalls: newTotalBalls,
-            runsConceded: sql`${over.runsConceded} - ${totalRuns}`,
-            wicketsTaken: lastDelivery.isWicket ? sql`${over.wicketsTaken} - 1` : over.wicketsTaken,
-            maidens: revertMaiden ? false : overRecord.maidens,
-          }).where(eq(over.id, overRecord.id));
-
-          // If we reverted a maiden, also decrement the bowler's maiden count
-          if (revertMaiden && bowlCard) {
-            await tx.update(bowlingScorecard).set({
-              maidens: bowlCard.maidens - 1,
-            }).where(eq(bowlingScorecard.id, bowlCard.id));
-          }
+        if (reverted.revertMaiden && bowlCard) {
+          await tx.update(bowlingScorecard).set({
+            maidens: bowlCard.maidens - 1,
+          }).where(eq(bowlingScorecard.id, bowlCard.id));
         }
       }
 

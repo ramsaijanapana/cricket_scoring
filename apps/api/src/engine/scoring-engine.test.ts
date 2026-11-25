@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveStrikerRotation,
   checkInningsCompletion,
+  revertOverAfterUndo,
+  bowlerForEmptyOver,
   scoringEngine,
 } from './scoring-engine';
 
@@ -712,5 +714,71 @@ describe('ScoringEngine — Powerplay Detection', () => {
 
   it('empty config returns null', () => {
     expect(scoringEngine.getCurrentPowerplay(0, [])).toBeNull();
+  });
+});
+
+describe('ScoringEngine — undo keeps the over row', () => {
+  // delivery.over_id cascades on delete, and commentary.delivery_id does not.
+  // Deleting the over aborts the undo, so the first ball of an over stays scored.
+  it('undo of the only ball resets the over to empty instead of removing it', () => {
+    const reverted = revertOverAfterUndo(
+      { legalBalls: 1, totalBalls: 1, runsConceded: 4, wicketsTaken: 0, maidens: false },
+      { isLegal: true, totalRuns: 4, isWicket: false },
+      6,
+    );
+
+    expect(reverted).toEqual({
+      legalBalls: 0,
+      totalBalls: 0,
+      runsConceded: 0,
+      wicketsTaken: 0,
+      maidens: false,
+      revertMaiden: false,
+    });
+  });
+
+  it('undo of a later ball only subtracts that ball', () => {
+    const reverted = revertOverAfterUndo(
+      { legalBalls: 3, totalBalls: 4, runsConceded: 7, wicketsTaken: 1, maidens: false },
+      { isLegal: false, totalRuns: 1, isWicket: false },
+      6,
+    );
+
+    expect(reverted).toEqual({
+      legalBalls: 3,
+      totalBalls: 3,
+      runsConceded: 6,
+      wicketsTaken: 1,
+      maidens: false,
+      revertMaiden: false,
+    });
+  });
+
+  it('undo of the ball that completed a maiden clears the maiden', () => {
+    const reverted = revertOverAfterUndo(
+      { legalBalls: 6, totalBalls: 6, runsConceded: 0, wicketsTaken: 0, maidens: true },
+      { isLegal: true, totalRuns: 0, isWicket: false },
+      6,
+    );
+
+    expect(reverted.legalBalls).toBe(5);
+    expect(reverted.totalBalls).toBe(5);
+    expect(reverted.maidens).toBe(false);
+    expect(reverted.revertMaiden).toBe(true);
+  });
+
+  it('a different bowler can take an emptied over', () => {
+    expect(bowlerForEmptyOver('bowler-c', 'bowler-a')).toEqual({ bowlerId: 'bowler-c' });
+  });
+
+  it('the bowler who finished the previous over cannot take the emptied over', () => {
+    const result = bowlerForEmptyOver('bowler-a', 'bowler-a');
+    expect(result).toEqual({
+      error: 'VALIDATION_ERROR: Same bowler cannot bowl consecutive overs. Please select a different bowler.',
+    });
+  });
+
+  it('the first over has no previous bowler to block', () => {
+    expect(bowlerForEmptyOver('bowler-b', null)).toEqual({ bowlerId: 'bowler-b' });
   });
 });
