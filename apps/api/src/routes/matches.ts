@@ -524,15 +524,17 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
       const officials = matchData.matchOfficials as Record<string, unknown> ?? {};
       const dlsInterruptions: DLSInterruption[] = (officials.dlsInterruptions as DLSInterruption[]) ?? [];
 
-      // Update the most recent interruption with overs lost
+      // Update the most recent interruption with overs lost.
+      // Earlier delays already recorded their own loss, so this delay only
+      // stores the additional cut. The sum equals original allocation minus
+      // the revised allocation.
       if (dlsInterruptions.length > 0) {
         const lastInterruption = dlsInterruptions[dlsInterruptions.length - 1];
-
-        // Calculate overs lost: difference between what was available and what's now available
-        const oversUsedAtInterruption = lastInterruption.oversAtInterruption;
-        const oversRemainingBefore = originalOvers - oversUsedAtInterruption;
-        const oversRemainingAfter = revisedOvers - oversUsedAtInterruption;
-        lastInterruption.oversLost = Math.max(0, oversRemainingBefore - oversRemainingAfter);
+        const earlierLost = dlsInterruptions
+          .slice(0, -1)
+          .reduce((sum, interruption) => sum + interruption.oversLost, 0);
+        const allocationLost = Math.max(0, originalOvers - revisedOvers);
+        lastInterruption.oversLost = Math.max(0, allocationLost - earlierLost);
       }
 
       // If we have a completed first innings, calculate revised target for second innings
@@ -545,7 +547,9 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
           team1TotalOvers: originalOvers,
           team1WicketsLost: firstInnings.totalWickets,
           team1InningsComplete: true,
-          team2TotalOvers: revisedOvers,
+          // Original allocation. The interruption's oversLost applies the cut
+          // once. Passing revisedOvers here as well would shorten the chase twice.
+          team2TotalOvers: originalOvers,
           interruptions: dlsInterruptions,
         });
 
@@ -648,19 +652,13 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
     // Calculate live DLS state
     const team1Complete = firstInnings.status === 'completed';
 
-    // Determine effective team 2 overs (may have been reduced)
-    let team2Overs = originalOvers;
-    const totalOversLost = dlsInterruptions.reduce((sum, i) => sum + i.oversLost, 0);
-    if (totalOversLost > 0) {
-      team2Overs = originalOvers - totalOversLost;
-    }
-
     const result = dlsEngine.calculateRevisedTarget({
       team1Score: firstInnings.totalRuns,
       team1TotalOvers: originalOvers,
       team1WicketsLost: firstInnings.totalWickets,
       team1InningsComplete: team1Complete,
-      team2TotalOvers: team2Overs,
+      // Original allocation; interruptions carry the overs already lost.
+      team2TotalOvers: originalOvers,
       interruptions: dlsInterruptions,
     });
 
@@ -671,7 +669,7 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
         firstInnings.totalRuns,
         originalOvers,
         team1Complete,
-        team2Overs,
+        originalOvers,
         parseFloat(String(secondInnings.totalOvers)) || 0,
         secondInnings.totalWickets,
         dlsInterruptions,

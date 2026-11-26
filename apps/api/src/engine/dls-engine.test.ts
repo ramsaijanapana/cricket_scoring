@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { DLSEngine } from './dls-engine';
+import { DLSEngine, subtractCricketOvers } from './dls-engine';
 
 const dls = new DLSEngine();
 
@@ -139,6 +139,63 @@ describe('DLSEngine', () => {
       expect(result.interruptions).toHaveLength(2);
     });
 
+    it('keeps a full revised allocation when the cut is recorded once', () => {
+      // 50-over match, team 1 made 250. Rain before the chase cuts team 2 to 40.
+      // Callers pass the original allocation and let oversLost apply the cut once.
+      const result = dls.calculateRevisedTarget({
+        team1Score: 250,
+        team1TotalOvers: 50,
+        team1WicketsLost: 10,
+        team1InningsComplete: true,
+        team2TotalOvers: 50,
+        interruptions: [{
+          oversAtInterruption: 0,
+          scoreAtInterruption: 0,
+          wicketsLostAtInterruption: 0,
+          oversLost: 10,
+        }],
+      });
+
+      const team1Resources = dls.getResourcePercentage(50, 0);
+      const team2Resources = dls.getResourcePercentage(40, 0);
+      const par = dls.calculateParScore(250, team1Resources, team2Resources);
+      expect(result.team2Resources).toBeCloseTo(team2Resources, 2);
+      expect(result.parScore).toBe(par);
+      expect(result.revisedTarget).toBe(par + 1);
+      // 40-over resources are 90.3% of a 50-over innings, so the par stays near 226.
+      expect(result.revisedTarget).toBe(227);
+    });
+
+    it('does not treat 4 balls as a full extra over after a mid-innings stoppage', () => {
+      // Stopped at 12.4 (76 balls). A 50-over match cut to 20 leaves 7.2 overs.
+      // Base-10 subtraction produces 37.6 and 7.6, which the table reads as 38 and 8.
+      const wickets = 2;
+      const result = dls.calculateRevisedTarget({
+        team1Score: 250,
+        team1TotalOvers: 50,
+        team1WicketsLost: 10,
+        team1InningsComplete: true,
+        team2TotalOvers: 50,
+        interruptions: [{
+          oversAtInterruption: 12.4,
+          scoreAtInterruption: 80,
+          wicketsLostAtInterruption: wickets,
+          oversLost: 30,
+        }],
+      });
+
+      const before = dls.getResourcePercentage(37.2, wickets);
+      const after = dls.getResourcePercentage(7.2, wickets);
+      const full = dls.getResourcePercentage(50, 0);
+      const expectedResources = full - (before - after);
+      expect(result.team2Resources).toBeCloseTo(expectedResources, 2);
+
+      const buggyBefore = dls.getResourcePercentage(38, wickets);
+      const buggyAfter = dls.getResourcePercentage(8, wickets);
+      const buggyResources = full - (buggyBefore - buggyAfter);
+      expect(Math.abs(result.team2Resources - buggyResources)).toBeGreaterThan(0.5);
+    });
+
     it('handles T20 format correctly', () => {
       // T20: Team 1 scores 180. Rain reduces to 15 overs.
       const result = dls.calculateRevisedTarget({
@@ -160,7 +217,21 @@ describe('DLSEngine', () => {
     });
   });
 
-  describe('getBaselineScore', () => {
+  describe('subtractCricketOvers', () => {
+  it('counts 12.4 as 4 balls, so 50 overs minus 12.4 is 37.2', () => {
+    expect(subtractCricketOvers(50, 12.4)).toBeCloseTo(37.2, 5);
+  });
+
+  it('subtracts a whole-over cut from a ball remainder without borrowing a ball', () => {
+    expect(subtractCricketOvers(37.2, 30)).toBeCloseTo(7.2, 5);
+  });
+
+  it('matches decimal subtraction for whole overs', () => {
+    expect(subtractCricketOvers(50, 10)).toBe(40);
+  });
+});
+
+describe('getBaselineScore', () => {
     it('returns 245 for 50-over format', () => {
       expect(dls.getBaselineScore(50)).toBe(245);
     });
@@ -180,22 +251,32 @@ describe('DLSEngine', () => {
   });
 
   describe('getCurrentParScore', () => {
-    it('returns a par score during the chase', () => {
+    it('returns the par for overs still left in the revised chase', () => {
+      // Original 50, cut by 10 before the chase, 20 overs bowled, 2 wickets down.
+      const interruptions = [{
+        oversAtInterruption: 0,
+        scoreAtInterruption: 0,
+        wicketsLostAtInterruption: 0,
+        oversLost: 10,
+      }];
       const par = dls.getCurrentParScore(
-        250,   // team 1 score
-        50,    // team 1 total overs
-        true,  // team 1 complete
-        40,    // team 2 total overs (reduced)
-        20,    // team 2 overs used so far
-        2,     // team 2 wickets lost
-        [{
-          oversAtInterruption: 0,
-          scoreAtInterruption: 0,
-          wicketsLostAtInterruption: 0,
-          oversLost: 10,
-        }],
+        250,
+        50,
+        true,
+        50,
+        20,
+        2,
+        interruptions,
       );
 
+      const team2Resources = dls.getResourcePercentage(40, 0);
+      const resourcesRemaining = dls.getResourcePercentage(20, 2);
+      const expected = dls.calculateParScore(
+        250,
+        dls.getResourcePercentage(50, 0),
+        team2Resources - resourcesRemaining,
+      );
+      expect(par).toBe(expected);
       expect(par).toBeGreaterThan(0);
       expect(par).toBeLessThan(250);
     });

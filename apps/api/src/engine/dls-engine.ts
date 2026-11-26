@@ -115,6 +115,29 @@ function roundTo2(n: number): number {
   return Math.round(n * 100) / 100;
 }
 
+/**
+ * Cricket overs are not decimal overs. 12.4 means 12 overs and 4 balls.
+ * Subtracting that from 50 in base 10 yields 37.6, which the resource table
+ * reads as 37 overs and 6 balls — a full extra over.
+ */
+export function subtractCricketOvers(total: number, used: number): number {
+  const toBalls = (overs: number) => {
+    const sign = overs < 0 ? -1 : 1;
+    const absolute = Math.abs(overs);
+    let whole = Math.floor(absolute);
+    let balls = Math.round((absolute - whole) * 10);
+    whole += Math.floor(balls / 6);
+    balls = ((balls % 6) + 6) % 6;
+    return sign * (whole * 6 + balls);
+  };
+
+  const remainingBalls = toBalls(total) - toBalls(used);
+  if (remainingBalls <= 0) return 0;
+  const whole = Math.floor(remainingBalls / 6);
+  const balls = remainingBalls % 6;
+  return whole + balls / 10;
+}
+
 const RESOURCE_TABLE = buildResourceTable();
 
 /** G50 baseline: expected score in a full 50-over innings. */
@@ -243,8 +266,14 @@ export class DLSEngine {
 
     for (const interruption of input.interruptions) {
       const oversUsedBeforeInterruption = interruption.oversAtInterruption;
-      const oversRemainingBeforeInterruption = currentOversRemaining - oversUsedBeforeInterruption;
-      const oversRemainingAfterInterruption = oversRemainingBeforeInterruption - interruption.oversLost;
+      const oversRemainingBeforeInterruption = subtractCricketOvers(
+        currentOversRemaining,
+        oversUsedBeforeInterruption,
+      );
+      const oversRemainingAfterInterruption = subtractCricketOvers(
+        oversRemainingBeforeInterruption,
+        interruption.oversLost,
+      );
 
       const resourceBefore = this.getResourcePercentage(
         Math.max(0, oversRemainingBeforeInterruption),
@@ -259,7 +288,7 @@ export class DLSEngine {
       totalAvailable -= resourceLost;
 
       // After this interruption, the new effective overs remaining changes
-      currentOversRemaining = currentOversRemaining - interruption.oversLost;
+      currentOversRemaining = subtractCricketOvers(currentOversRemaining, interruption.oversLost);
     }
 
     return Math.max(0, totalAvailable);
@@ -272,8 +301,8 @@ export class DLSEngine {
    * @param team1Score       - First innings total
    * @param team1TotalOvers  - Overs allocated to team 1
    * @param team1Complete    - Whether team 1 completed their innings
-   * @param team2TotalOvers  - Current total overs allocated to team 2
-   * @param team2OversUsed   - Overs bowled so far in team 2's innings
+   * @param team2TotalOvers  - Original overs allocated to team 2, before interruption losses
+   * @param team2OversUsed   - Overs bowled so far in team 2's innings (cricket notation, e.g. 12.4)
    * @param team2WicketsLost - Wickets lost by team 2 so far
    * @param interruptions    - Interruptions that have occurred
    */
@@ -300,8 +329,12 @@ export class DLSEngine {
       interruptions,
     });
 
-    // Resources remaining for team 2 from this point
-    const oversRemaining = Math.max(0, team2TotalOvers - team2OversUsed);
+    // team2TotalOvers is the original allocation. Interruptions already
+    // reduced the resources above, so the overs still left to bowl are the
+    // revised allocation minus the overs already bowled.
+    const allocationLost = interruptions.reduce((sum, interruption) => sum + interruption.oversLost, 0);
+    const revisedAllocation = subtractCricketOvers(team2TotalOvers, allocationLost);
+    const oversRemaining = subtractCricketOvers(revisedAllocation, team2OversUsed);
     const resourcesRemaining = this.getResourcePercentage(oversRemaining, team2WicketsLost);
 
     // Resources used by team 2 so far = total available - remaining
