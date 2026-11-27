@@ -104,6 +104,21 @@ export function checkInningsCompletion(
 }
 
 /**
+ * Overs that close the innings. A rain resume stores a shortened allocation
+ * on the match because the format row is shared and keeps the original length.
+ * Without this, a 20-over chase cut to 10 overs stays open until over 20.
+ */
+export function effectiveOversPerInnings(
+  formatOvers: number | null,
+  revisedOvers: unknown,
+): number | null {
+  if (typeof revisedOvers === 'number' && Number.isFinite(revisedOvers) && revisedOvers > 0) {
+    return revisedOvers;
+  }
+  return formatOvers;
+}
+
+/**
  * Scoring Engine — core ball-by-ball logic.
  *
  * Per context.md section 13:
@@ -869,7 +884,11 @@ export class ScoringEngine {
       inningsId: inningsData.id,
       inningsNum: inningsData.inningsNumber,
       formatConfig: {
-        oversPerInnings: formatConfig.oversPerInnings,
+        oversPerInnings: effectiveOversPerInnings(
+          formatConfig.oversPerInnings,
+          (matchData.matchOfficials as { revisedOversPerInnings?: unknown } | null)
+            ?.revisedOversPerInnings,
+        ),
         ballsPerOver: formatConfig.ballsPerOver,
         maxBowlerOvers: formatConfig.maxBowlerOvers,
         inningsPerSide: formatConfig.inningsPerSide,
