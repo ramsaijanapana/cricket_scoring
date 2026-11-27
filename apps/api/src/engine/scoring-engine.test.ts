@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   resolveStrikerRotation,
   checkInningsCompletion,
+  effectiveOversPerInnings,
   scoringEngine,
 } from './scoring-engine';
 
@@ -296,6 +297,23 @@ describe('ScoringEngine — Innings Completion', () => {
 
   it('test match: no max overs limit (null)', () => {
     expect(checkInningsCompletion(5, 100, null, 400, null)).toBe(false);
+  });
+
+  it('ends a rain-shortened chase at the revised over limit', () => {
+    // Resume keeps the format at 20 and stores 10 on the match.
+    // The 10th over is complete and the score is still short of the target.
+    const shortened = effectiveOversPerInnings(20, 10);
+    expect(shortened).toBe(10);
+    expect(checkInningsCompletion(1, 10, shortened, 80, 121)).toBe(true);
+    // The original format length would leave this chase open for another 10 overs.
+    expect(checkInningsCompletion(1, 10, effectiveOversPerInnings(20, undefined), 80, 121)).toBe(false);
+  });
+
+  it('keeps the format length when no revised allocation was stored', () => {
+    expect(effectiveOversPerInnings(50, undefined)).toBe(50);
+    expect(effectiveOversPerInnings(50, null)).toBe(50);
+    expect(effectiveOversPerInnings(50, 0)).toBe(50);
+    expect(effectiveOversPerInnings(null, undefined)).toBe(null);
   });
 });
 

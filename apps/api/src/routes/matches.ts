@@ -579,6 +579,10 @@ export const matchRoutes: FastifyPluginAsync = async (app) => {
           ...(matchData.matchOfficials as Record<string, unknown> ?? {}),
           dlsInterruptions,
           dlsState,
+          // Scoring reads this. The shared format row stays at the original length.
+          ...(Number.isFinite(Number(revisedOvers)) && Number(revisedOvers) > 0
+            ? { revisedOversPerInnings: Number(revisedOvers) }
+            : {}),
         },
       }).where(eq(match.id, req.params.id));
     }
