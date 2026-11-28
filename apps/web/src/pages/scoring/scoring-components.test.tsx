@@ -121,6 +121,25 @@ describe('ScoringPad', () => {
     );
     expect(screen.getByLabelText('Score 1 run')).toBeDisabled();
     expect(screen.getByLabelText('Score 4 runs')).toBeDisabled();
+    expect(screen.getByLabelText('Record wicket')).toBeDisabled();
+  });
+
+  it('disables the wicket button while a delivery is still being saved', () => {
+    render(
+      <ScoringPad
+        extrasMode="normal"
+        onExtrasModeChange={vi.fn()}
+        onRecordRuns={vi.fn()}
+        onWicketClick={vi.fn()}
+        isPending
+        pendingBowlerChange={false}
+        scoringDisabled={false}
+        wicketShake={false}
+        reduceMotion
+      />,
+    );
+    expect(screen.getByLabelText('Record wicket')).toBeDisabled();
+    expect(screen.getByLabelText('Score 1 run')).toBeDisabled();
   });
 
   it('toggles extras mode via modifier buttons', () => {

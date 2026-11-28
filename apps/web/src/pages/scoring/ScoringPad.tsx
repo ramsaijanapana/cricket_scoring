@@ -128,7 +128,7 @@ export function ScoringPad({
       <motion.div variants={reduceMotion ? undefined : itemVariants}>
         <motion.button
           onClick={onWicketClick}
-          disabled={scoringDisabled}
+          disabled={disabled}
           aria-label="Record wicket"
           whileTap={reduceMotion ? undefined : { scale: 0.95 }}
           animate={
