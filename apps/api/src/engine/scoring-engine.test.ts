@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   resolveStrikerRotation,
   checkInningsCompletion,
+  lockInningsForScoring,
   scoringEngine,
 } from './scoring-engine';
 
@@ -712,5 +713,45 @@ describe('ScoringEngine — Powerplay Detection', () => {
 
   it('empty config returns null', () => {
     expect(scoringEngine.getCurrentPowerplay(0, [])).toBeNull();
+  });
+});
+
+describe('lockInningsForScoring', () => {
+  function sqlText(statement: { queryChunks?: Array<{ value?: unknown }> }): string {
+    return (statement.queryChunks ?? [])
+      .map((chunk) => {
+        if (Array.isArray(chunk.value)) return chunk.value.join('');
+        if (typeof chunk.value === 'string') return chunk.value;
+        return '';
+      })
+      .join(' ');
+  }
+
+  it('locks the innings row so a second ball waits for the updated total', async () => {
+    const execute = vi.fn().mockResolvedValue([]);
+    const findFirst = vi.fn().mockResolvedValue({ id: 'inn-1', matchId: 'match-1' });
+    const tx = {
+      query: { innings: { findFirst } },
+      execute,
+    };
+
+    await lockInningsForScoring(tx as never, 'match-1', 2);
+
+    expect(findFirst).toHaveBeenCalledOnce();
+    expect(execute).toHaveBeenCalledOnce();
+    expect(sqlText(execute.mock.calls[0][0]).toLowerCase()).toContain('for update');
+  });
+
+  it('does not lock a row when the innings does not exist', async () => {
+    const execute = vi.fn();
+    const tx = {
+      query: { innings: { findFirst: vi.fn().mockResolvedValue(undefined) } },
+      execute,
+    };
+
+    await expect(lockInningsForScoring(tx as never, 'match-1', 'missing')).rejects.toThrow(
+      'Innings not found',
+    );
+    expect(execute).not.toHaveBeenCalled();
   });
 });

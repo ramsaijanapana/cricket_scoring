@@ -4,18 +4,18 @@
 
 ## Current State
 
-- Updated: 2026-06-22T15:28:24.481Z
-- Branch: main
-- Head: 90b56dd
-- Focus: P3 live commentary
+- Updated: 2026-11-28T11:13:56.383Z
+- Branch: cursor/recent-commits-critical-bugs-b911
+- Head: dadd810
+- Focus: lost delivery totals
 
 ## Latest Summary
 
-- P3 A++ sprint: shared UI kit, scoring refactor, match cache, API route tests, mobile offline/haptics tests, CI smoke/a11y, docs/metrics
+- Serialize innings writes so overlapping balls cannot drop runs, and keep the wicket control disabled until the current ball finishes.
 
 ## Next Steps
 
-- Monitor CI on main after push
+- Review the innings row lock and the scoring pad pending state.
 
 ## Risks / Watchouts
 
@@ -27,35 +27,25 @@
 
 ## Verification
 
-- npm test: 309 passed (api 171, web 82, mobile 56)
+- api scoring-engine.test.ts 99 passed; web scoring-components.test.tsx 11 passed
 
 ## Working Tree Snapshot
 
-- Changed files: 136
+- Changed files: 4
 - Staged files: 0
-- agent-context/state.json
-- .env.example
-- .github/workflows/ci.yml
-- .github/workflows/deploy.yml
-- README.md
-- apps/api/.env.example
-- apps/api/src/config.ts
-- apps/api/src/db/index.ts
-- apps/api/src/middleware/metrics.ts
-- apps/api/src/middleware/pagination.ts
-- apps/api/src/routes/analytics.ts
-- apps/api/src/routes/commentary.ts
-- apps/api/src/server.ts
-- apps/api/src/services/notification-service.ts
-- apps/api/src/services/scoring-orchestrator.ts
-- apps/api/src/services/sentry.ts
-- apps/api/src/workers/notification-worker.ts
-- apps/mobile/app.json
-- apps/mobile/app/(tabs)/_layout.tsx
-- apps/mobile/app/(tabs)/chat.tsx
-- +116 more changed files
+- apps/api/src/engine/scoring-engine.test.ts
+- apps/api/src/engine/scoring-engine.ts
+- apps/web/src/pages/scoring/ScoringPad.tsx
+- apps/web/src/pages/scoring/scoring-components.test.tsx
 
 ## Recent Checkpoints
+
+### 2026-11-28T11:13:56.383Z — lost delivery totals
+
+- Actor: ubuntu
+- Summary: Serialize innings writes so overlapping balls cannot drop runs, and keep the wicket control disabled until the current ball finishes.
+- Next: Review the innings row lock and the scoring pad pending state.
+- Verified: api scoring-engine.test.ts 99 passed; web scoring-components.test.tsx 11 passed
 
 ### 2026-06-22T15:28:24.481Z — P3 live commentary
 
@@ -84,13 +74,6 @@
 - Summary: P3 mobile polish: NativeWind className tsc fix via nativewind-env.d.ts augmentations; landscape scorer hint + side panel layout; haptics tests (wicket=heavy, boundary=medium); live match tab badge on Score tab; assorted mobile tsc fixes
 - Next: Continue P3 sprint agents; commit when ready
 - Verified: apps/mobile tsc clean; npm test 56/56
-
-### 2026-06-22T15:15:59.189Z — P3 contract unification
-
-- Actor: test
-- Summary: P3 contract unification: shared dtos.ts (MatchDetail, Paginated, RecordDeliveryInput, ScorecardSnapshot, RecordDeliveryResult); normalized WS events to snake_case + WS_EVENTS; web/mobile/api migrated off local scoring DTOs
-- Next: Other P3 agents; fix mobile haptics.test.ts parse error (unrelated)
-- Verified: shared build OK; api 171/171; web 82/82; mobile contract tests 40/40; root npm test blocked by haptics.test.ts syntax
 
 ## Workflow Rule
 

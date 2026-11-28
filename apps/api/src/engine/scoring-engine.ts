@@ -104,6 +104,34 @@ export function checkInningsCompletion(
 }
 
 /**
+ * Hold the innings row for the rest of this transaction.
+ *
+ * Innings totals are written as absolute values taken from a read. PostgreSQL's
+ * default isolation is READ COMMITTED, and these transactions do not raise it,
+ * so two overlapping balls both read the same total and the later commit
+ * drops the other ball's runs. Locking the row makes the second ball wait
+ * and then read the updated total.
+ */
+export async function lockInningsForScoring(
+  tx: TxOrDb,
+  matchId: string,
+  inningsNumOrId: number | string,
+): Promise<void> {
+  const inningsData = typeof inningsNumOrId === 'number'
+    ? await tx.query.innings.findFirst({
+        where: and(eq(innings.matchId, matchId), eq(innings.inningsNumber, inningsNumOrId)),
+      })
+    : await tx.query.innings.findFirst({
+        where: eq(innings.id, inningsNumOrId),
+      });
+  if (!inningsData) throw new Error('Innings not found');
+
+  await tx.execute(
+    sql`select ${innings.id} from ${innings} where ${innings.id} = ${inningsData.id} for update`,
+  );
+}
+
+/**
  * Scoring Engine — core ball-by-ball logic.
  *
  * Per context.md section 13:
@@ -122,6 +150,7 @@ export class ScoringEngine {
    */
   async recordDelivery(input: DeliveryInput, clientId?: string): Promise<ScoringResult> {
     return db.transaction(async (tx) => {
+      await lockInningsForScoring(tx, input.matchId, input.inningsNum);
       const context = await this.getContext(input.matchId, input.inningsNum, tx);
 
       // Dead ball: record for audit trail but don't count anything
@@ -499,6 +528,7 @@ export class ScoringEngine {
    */
   async undoLastBall(matchId: string, inningsId: string): Promise<{ success: boolean; overriddenId?: string }> {
     return db.transaction(async (tx) => {
+      await lockInningsForScoring(tx, matchId, inningsId);
       const lastDelivery = await tx.query.delivery.findFirst({
         where: and(
           eq(delivery.inningsId, inningsId),
